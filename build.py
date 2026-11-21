@@ -11,7 +11,9 @@ build.py - "Python Library Atlas" ওয়েবসাইট বানায়
 """
 
 import json
+import os
 import re
+import shutil
 from datetime import date
 from pathlib import Path
 
@@ -117,6 +119,13 @@ def export_images(libs, inline=False):
     for f in folder.iterdir():                                  # পুরোনো ছবি মুছে ফেলা
         if f.name not in keep:
             f.unlink()
+    if os.environ.get("GITHUB_ACTIONS"):
+        # GitHub Actions-এ চললে ছবিগুলো সরাসরি সাইটের ফোল্ডারেও রাখা,
+        # যাতে deploy.yml পুরোনো হলেও ছবি সাইটে ওঠে
+        site_img = ROOT / "_site" / "img"
+        site_img.mkdir(parents=True, exist_ok=True)
+        for name in keep:
+            shutil.copy2(folder / name, site_img / name)
     return len(keep)
 
 
@@ -132,6 +141,9 @@ def build():
                     .replace("__YEAR__", str(date.today().year))
                     .replace("__DATA__", data))
     (ROOT / "index.html").write_text(page, encoding="utf-8")
+    if os.environ.get("GITHUB_ACTIONS"):
+        (ROOT / "_site").mkdir(exist_ok=True)
+        (ROOT / "_site" / "index.html").write_text(page, encoding="utf-8")
     print(f"index.html তৈরি ✔  {len(libs)}টা লাইব্রেরি · {n_full}টা সম্পূর্ণ · "
           f"{n_ex}টা উদাহরণ · {n_img}টায় ছবি · {(ROOT / 'index.html').stat().st_size / 1e6:.1f} MB"
           + (f" · img/ ফোল্ডারে {n_files}টা ছবি" if n_files else " · ছবি HTML-এর ভেতরে"))
@@ -385,9 +397,11 @@ function liveDoc(lv){const css=(lv.css||[]).map(u=>'<link rel="stylesheet" href=
  return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+css+'<style>html,body{margin:0;height:100%;background:#fff;font-family:system-ui,-apple-system,sans-serif;overflow:hidden}#app{position:relative;width:100%;height:100%;box-sizing:border-box;padding:10px}#app>svg{display:block}button{font:600 12px system-ui;border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;border-radius:99px;padding:6px 14px;cursor:pointer;z-index:5}#err{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:20px;color:#6b6288;font-size:14px;background:#faf7ff}</style></head><body><div id="app"></div><div id="err"></div><script>function show(m){var e=document.getElementById("err");e.style.display="grid";e.textContent="⚠ "+m;}window.onerror=function(m){show(m);};<\/script>'+js+'<script>window.addEventListener("load",function(){if(window.__libfail)return;try{'+lv.js.replace(/<\/script/gi,'<\\/script')+'\n}catch(e){show(e.message);}});<\/script></body></html>';}
 function bootLive(st,X){if(st._on)return;st._on=true;const f=document.createElement('iframe');f.title=X.t;f.setAttribute('sandbox','allow-scripts');f.setAttribute('loading','lazy');f.srcdoc=liveDoc(X.live);st.innerHTML='';st.appendChild(f);}
 const LIO='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){bootLive(e.target,e.target._X);LIO.unobserve(e.target);}}),{rootMargin:'200px'}):null;
+function imgFail(im){if(!im.dataset.retry){im.dataset.retry=1;setTimeout(()=>{im.src=im.getAttribute('src').split('?')[0]+'?r='+Date.now();},600);return;}
+ const box=document.createElement('div');box.className='skip';box.innerHTML='<div class="big">🖼️</div><b>ছবিটা লোড হয়নি</b>ফাইলটা সাইটে পাওয়া যায়নি ('+esc(im.getAttribute('src').split('?')[0])+')। GitHub-এ outputs.json আর build.py আপলোড হয়েছে কিনা দেখো।';im.replaceWith(box);}
 function stageHTML(X){const o=X.out;
  if(X.live)return '<div class="stage live"><div class="boot">লাইভ ডেমো লোড হচ্ছে…</div></div>';
- if(o&&o.images&&o.images.length){return '<div class="stage">'+'<img loading="lazy" alt="'+esc(X.t)+'" src="'+o.images[0]+'">'+(o.images.length>1?'<div class="dots">'+o.images.map((_,k)=>'<button data-k="'+k+'"'+(k?'':' class="on"')+' aria-label="ছবি '+(k+1)+'"></button>').join('')+'</div>':'')+'</div>'+(o.text?'<pre class="term sub">'+esc(o.text)+'</pre>':'');}
+ if(o&&o.images&&o.images.length){return '<div class="stage">'+'<img loading="lazy" alt="'+esc(X.t)+'" src="'+o.images[0]+'" onerror="imgFail(this)">'+(o.images.length>1?'<div class="dots">'+o.images.map((_,k)=>'<button data-k="'+k+'"'+(k?'':' class="on"')+' aria-label="ছবি '+(k+1)+'"></button>').join('')+'</div>':'')+'</div>'+(o.text?'<pre class="term sub">'+esc(o.text)+'</pre>':'');}
  if(o&&o.text)return '<div class="stage"><pre class="term">'+esc(o.text)+'</pre></div>';
  const why=o&&o.reason||'আউটপুট এখনো তৈরি হয়নি';
  return '<div class="stage"><div class="skip"><div class="big">▶</div><b>নিজের কম্পিউটারে চালাও</b>'+esc(why)+', তাই এখানে আগে থেকে চালানো যায়নি। নিচের <span class="kbd">&lt;/&gt;</span> বাটনে কোড দেখো।</div></div>';}
