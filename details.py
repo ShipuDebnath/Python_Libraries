@@ -6476,3 +6476,793 @@ plt.savefig("missing_summary.png", dpi=150)'''),
     limits=["শুধু মিসিং ডেটা দেখায়, ঠিক করে না", "খুব বেশি কলামে ছবি ঘন হয়ে যায়"],
     alt="pandas, seaborn",
 )
+
+
+# ==================================================================
+# AI, ভাষা মডেল ও এজেন্ট – ব্যাচ ১
+# ==================================================================
+
+pylib("sentence-transformers",
+    about=("sentence-transformers দিয়ে যেকোনো বাক্যকে একটা সংখ্যার তালিকায় (embedding) রূপান্তর করা যায়, যাতে অর্থে "
+           "কাছাকাছি বাক্যগুলোর সংখ্যাও কাছাকাছি হয়। এতে শব্দ না মিললেও অর্থ দিয়ে খোঁজা (semantic search) সম্ভব।"),
+    install="pip install sentence-transformers",
+    examples=[
+        ex("বাক্যের মিল মাপা",
+           "চারটা বাক্যের embedding বানিয়ে প্রতিটা জোড়ার cosine similarity – অর্থে কাছের বাক্যের স্কোর বেশি।",
+           '''from sentence_transformers import SentenceTransformer, util
+
+model = SentenceTransformer("all-MiniLM-L6-v2")      # প্রথমবার ~৯০ MB ডাউনলোড
+sentences = [
+    "The cat sits on the mat.",
+    "A kitten is resting on a rug.",
+    "Stock prices fell sharply today.",
+    "The market dropped a lot this morning.",
+]
+emb = model.encode(sentences, convert_to_tensor=True)
+sim = util.cos_sim(emb, emb)
+
+for i in range(len(sentences)):
+    for j in range(i + 1, len(sentences)):
+        print(f"{sim[i][j]:.2f}  {sentences[i]}  ↔  {sentences[j]}")'''),
+        ex("অর্থের মিল দিয়ে গবেষণাপত্র খোঁজার টুল",
+           "পেপারের শিরোনামগুলো একবার embedding করে রাখে; প্রশ্ন লিখলে শব্দ না মিললেও অর্থে সবচেয়ে কাছের ৩টা পেপার দেখায়।",
+           '''from sentence_transformers import SentenceTransformer, util
+
+papers = [
+    "Deep learning for flood prediction in river basins",
+    "Monsoon rainfall variability over South Asia",
+    "Transformer models for low-resource language translation",
+    "Satellite imagery for crop yield estimation",
+    "Urban heat islands and green spaces in megacities",
+    "Detecting fake news with graph neural networks",
+    "Mangrove forest loss measured from Landsat data",
+]
+model = SentenceTransformer("all-MiniLM-L6-v2")
+paper_emb = model.encode(papers, convert_to_tensor=True, normalize_embeddings=True)
+
+def search(query, k=3):
+    q = model.encode(query, convert_to_tensor=True, normalize_embeddings=True)
+    hits = util.semantic_search(q, paper_emb, top_k=k)[0]
+    print(f"\\n🔎 {query}")
+    for h in hits:
+        print(f"  {h['score']:.2f}  {papers[h['corpus_id']]}")
+
+search("too much water in rivers")           # শব্দ মেলে না, অর্থ মেলে
+search("how hot are cities")
+search("tracking forests from space")'''),
+    ],
+    level="শুরু থেকে মাঝারি", tag="বাক্যকে embedding-এ রূপান্তর: অর্থ দিয়ে খোঁজা, মিল মাপা, দলে ভাগ করা।",
+    tasks=["semantic search", "ডুপ্লিকেট প্রশ্ন খোঁজা", "সুপারিশ ব্যবস্থা", "RAG-এর জন্য ডকুমেন্ট embedding", "টেক্সট ক্লাস্টারিং"],
+    caps=["হাজারো তৈরি মডেল (বহুভাষিক সহ)", "cos_sim, semantic_search, paraphrase_mining", "নিজের ডেটায় fine-tune"],
+    limits=["প্রথমবার মডেল ডাউনলোড লাগে", "বড় মডেল CPU-তে ধীর; GPU থাকলে দ্রুত"],
+    alt="transformers, faiss, chromadb",
+)
+
+pylib("langgraph",
+    about=("LangGraph দিয়ে AI কাজকে ধাপে ধাপে একটা গ্রাফ হিসেবে সাজানো যায়: প্রতিটা ধাপ (node) একটা ফাংশন, তাদের মধ্যে "
+           "পথ (edge), শর্ত অনুযায়ী শাখা, আর মাঝপথে থেমে মানুষের অনুমোদন নেওয়া। নিচের উদাহরণ API key ছাড়াই চলে।"),
+    install="pip install langgraph",
+    examples=[
+        ex("শর্তসাপেক্ষ শাখা সহ গ্রাফ",
+           "একটা প্রশ্ন আগে শ্রেণিবিন্যাস হয় (গণিত না সাধারণ), তারপর ঠিক ধাপে যায় – add_conditional_edges দিয়ে।",
+           '''from typing import TypedDict
+from langgraph.graph import END, START, StateGraph
+
+class State(TypedDict):
+    question: str
+    kind: str
+    answer: str
+
+def classify(state: State):
+    is_math = any(ch.isdigit() for ch in state["question"])
+    return {"kind": "math" if is_math else "general"}
+
+def solve_math(state: State):
+    expr = "".join(ch for ch in state["question"] if ch in "0123456789+-*/(). ")
+    return {"answer": f"{expr.strip()} = {eval(expr)}"}     # শুধু ডেমো; আসল কাজে eval নয়
+
+def general(state: State):
+    return {"answer": "এটা গণিতের প্রশ্ন নয় – এখানে LLM কল করা যেত।"}
+
+builder = StateGraph(State)
+builder.add_node("classify", classify)
+builder.add_node("math", solve_math)
+builder.add_node("general", general)
+builder.add_edge(START, "classify")
+builder.add_conditional_edges("classify", lambda s: s["kind"], {"math": "math", "general": "general"})
+builder.add_edge("math", END)
+builder.add_edge("general", END)
+graph = builder.compile()
+
+for q in ["What is 12 * (3 + 4)?", "Who wrote Gitanjali?"]:
+    print(q, "→", graph.invoke({"question": q})["answer"])'''),
+        ex("মানুষের অনুমোদনের পর প্রকাশিত হয় এমন রিপোর্ট",
+           "খসড়া তৈরি হয় → গ্রাফ থেমে যায় (interrupt_before) → মানুষ পড়ে অনুমোদন দেয় → তারপরই 'publish' ধাপ চলে। MemorySaver অবস্থা মনে রাখে।",
+           '''from typing import TypedDict
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
+
+class Report(TypedDict, total=False):
+    topic: str
+    draft: str
+    approved: bool
+    published: str
+
+def write_draft(s: Report):
+    # আসল প্রজেক্টে এখানে LLM দিয়ে খসড়া লেখা হবে
+    return {"draft": f"Weekly report on {s['topic']}: rainfall was 20% above average."}
+
+def publish(s: Report):
+    if not s.get("approved"):
+        return {"published": "✘ অনুমোদন হয়নি, প্রকাশ বাতিল"}
+    return {"published": "✔ প্রকাশিত: " + s["draft"]}
+
+b = StateGraph(Report)
+b.add_node("write_draft", write_draft)
+b.add_node("publish", publish)
+b.add_edge(START, "write_draft")
+b.add_edge("write_draft", "publish")
+b.add_edge("publish", END)
+graph = b.compile(checkpointer=MemorySaver(), interrupt_before=["publish"])
+
+config = {"configurable": {"thread_id": "report-1"}}
+graph.invoke({"topic": "Dhaka weather"}, config)          # খসড়ার পরে থামবে
+print("খসড়া:", graph.get_state(config).values["draft"])
+print("পরের ধাপ:", graph.get_state(config).next)
+
+answer = input("প্রকাশ করব? (y/n): ").strip().lower()
+graph.update_state(config, {"approved": answer == "y"})
+print(graph.invoke(None, config)["published"])           # যেখানে থেমেছিল সেখান থেকে চলবে'''),
+    ],
+    level="মাঝারি", tag="অবস্থা, শাখা আর মানুষের অনুমোদনসহ ধাপে ধাপে AI workflow।",
+    tasks=["বহু-ধাপের AI এজেন্ট", "মানুষের অনুমোদন (human-in-the-loop)", "টুল ব্যবহারকারী এজেন্ট", "দীর্ঘ কাজ থেমে আবার চালানো"],
+    caps=["StateGraph, conditional edges, loops", "checkpointer দিয়ে অবস্থা সংরক্ষণ", "interrupt দিয়ে মাঝপথে থামা", "LangChain মডেল ও টুলের সাথে কাজ করে"],
+    limits=["API দ্রুত বদলায় – ভার্সন মিলিয়ে ডকুমেন্টেশন দেখো", "সহজ কাজে অপ্রয়োজনীয় জটিলতা"],
+    alt="langchain, crewai, autogen",
+)
+
+pylib("llama-index",
+    about=("LlamaIndex দিয়ে নিজের নথি (PDF, নোট, ওয়েবপেজ) থেকে প্রশ্নের উত্তর দেওয়া অ্যাপ (RAG) বানানো যায়: নথি টুকরো করা, "
+           "embedding, index, খোঁজা আর LLM দিয়ে উত্তর – কয়েক লাইনে। ডিফল্টে OpenAI ব্যবহার করে।"),
+    install="pip install llama-index\n# OPENAI_API_KEY সেট করো (অথবা লোকাল মডেল কনফিগার করো)",
+    examples=[
+        ex("৫ লাইনে নিজের নোট থেকে প্রশ্নোত্তর",
+           "notes ফোল্ডারের সব ফাইল পড়ে index বানায়, তারপর প্রশ্ন করলে নোট থেকেই উত্তর দেয়।",
+           '''from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
+
+documents = SimpleDirectoryReader("notes").load_data()      # .txt, .pdf, .md, .docx…
+index = VectorStoreIndex.from_documents(documents)
+query_engine = index.as_query_engine()
+
+response = query_engine.query("What are the main findings about monsoon rainfall?")
+print(response)'''),
+        ex("থিসিস নোটবুকের প্রশ্নোত্তর (উৎসসহ, সেভ করা index)",
+           "প্রথমবার index বানিয়ে ডিস্কে সেভ করে, পরের বার সেখান থেকেই লোড করে (খরচ বাঁচে); প্রতিটা উত্তরের সাথে কোন ফাইল থেকে এসেছে দেখায়।",
+           '''from pathlib import Path
+from llama_index.core import (SimpleDirectoryReader, StorageContext, VectorStoreIndex,
+                              load_index_from_storage)
+
+STORE = Path("thesis_index")
+if STORE.exists():
+    index = load_index_from_storage(StorageContext.from_defaults(persist_dir=str(STORE)))
+    print("সেভ করা index লোড হলো")
+else:
+    docs = SimpleDirectoryReader("thesis_notes", recursive=True).load_data()
+    index = VectorStoreIndex.from_documents(docs, show_progress=True)
+    index.storage_context.persist(persist_dir=str(STORE))
+    print(f"{len(docs)}টা নথি থেকে নতুন index বানানো হলো")
+
+engine = index.as_query_engine(similarity_top_k=3)
+while (q := input("\\nপ্রশ্ন (বের হতে Enter): ").strip()):
+    r = engine.query(q)
+    print("\\nউত্তর:", r)
+    print("উৎস:")
+    for node in r.source_nodes:
+        print(f"  {node.score:.2f}  {node.metadata.get('file_name')}")'''),
+    ],
+    level="মাঝারি", tag="নিজের নথি থেকে উত্তর দেওয়া (RAG) অ্যাপ কয়েক লাইনে।",
+    tasks=["PDF/নোট থেকে প্রশ্নোত্তর", "কোম্পানির ডকুমেন্ট চ্যাটবট", "নথি সারাংশ ও তুলনা", "এজেন্টকে নিজের ডেটায় টুল দেওয়া"],
+    caps=["১৬০+ ডেটা কানেক্টর", "অনেক vector store (Chroma, Qdrant, FAISS…)", "index সেভ/লোড", "উত্তরের সাথে উৎস"],
+    limits=["ডিফল্টে OpenAI খরচ হয়", "বড় নথিতে chunk সেটিং ঠিক করতে হয়"],
+    alt="langchain, haystack, chromadb",
+)
+
+pylib("litellm",
+    about=("LiteLLM দিয়ে একই কোডে ১০০+ AI মডেল (OpenAI, Claude, Gemini, লোকাল Ollama…) ব্যবহার করা যায়: শুধু model-এর নাম বদলাও। "
+           "খরচ হিসাব, retry, fallback আর প্রক্সি সার্ভারও আছে।"),
+    install="pip install litellm\n# যে provider ব্যবহার করবে তার API key সেট করো",
+    examples=[
+        ex("একই কোডে দুই provider",
+           "একটা completion() ফাংশন দিয়ে OpenAI আর Claude দুটোকেই একই প্রশ্ন।",
+           '''from litellm import completion
+
+messages = [{"role": "user", "content": "Explain recursion in one sentence."}]
+
+for model in ["openai/gpt-4.1-mini", "anthropic/claude-sonnet-5-5"]:
+    r = completion(model=model, messages=messages)
+    print(f"{model}:\\n  {r.choices[0].message.content}\\n")'''),
+        ex("মডেলভেদে উত্তর, সময় ও খরচ তুলনা",
+           "কয়েকটা মডেলকে একই প্রশ্ন করে প্রতিটার সময়, টোকেন আর আনুমানিক খরচ টেবিলে দেখায়; কোনোটা ব্যর্থ হলে বাকিগুলো চলতে থাকে।",
+           '''import time
+from litellm import completion, completion_cost
+
+MODELS = ["openai/gpt-4.1-mini", "anthropic/claude-sonnet-5-5", "ollama/llama3.2"]
+prompt = "Summarise the causes of monsoon floods in Bangladesh in 3 bullet points."
+
+rows = []
+for m in MODELS:
+    t = time.perf_counter()
+    try:
+        r = completion(model=m, messages=[{"role": "user", "content": prompt}], timeout=60)
+        took = time.perf_counter() - t
+        try:
+            cost = completion_cost(completion_response=r)
+        except Exception:
+            cost = 0.0                                  # লোকাল মডেল = বিনামূল্যে
+        rows.append((m, took, r.usage.total_tokens, cost, r.choices[0].message.content))
+    except Exception as e:
+        rows.append((m, time.perf_counter() - t, 0, 0.0, f"ERROR: {e}"))
+
+print(f"{'model':32}{'time':>7}{'tokens':>8}{'cost $':>10}")
+for m, took, tok, cost, _ in rows:
+    print(f"{m:32}{took:6.1f}s{tok:8}{cost:10.5f}")
+for m, *_, text in rows:
+    print(f"\\n── {m} ──\\n{text[:400]}")'''),
+    ],
+    level="শুরু", tag="এক API, ১০০+ AI মডেল; খরচ ও সময় হিসাবসহ।",
+    tasks=["মডেল তুলনা ও বেঞ্চমার্ক", "একটা ব্যর্থ হলে অন্যটায় fallback", "দলের জন্য এক প্রক্সি সার্ভার ও খরচের সীমা"],
+    caps=["OpenAI-ধাঁচের একই response ফরম্যাট", "completion_cost দিয়ে খরচ", "স্ট্রিমিং, async, retry, router"],
+    limits=["provider-এর বিশেষ ফিচার সবসময় একভাবে পাওয়া যায় না", "মডেলের নাম ও দাম বদলায় – আপডেট রাখো"],
+    alt="openai, anthropic, langchain",
+)
+
+pylib("ollama",
+    about=("ollama লাইব্রেরি দিয়ে পাইথন থেকে নিজের কম্পিউটারে চলা Ollama মডেলের (Llama, Gemma, Qwen…) সাথে কথা বলা যায়। "
+           "ইন্টারনেট বা API key লাগে না, ডেটা কম্পিউটারের বাইরে যায় না। আগে ollama.com থেকে Ollama ইনস্টল করতে হয়।"),
+    install="pip install ollama\n# ollama.com থেকে Ollama ইনস্টল করো, তারপর: ollama pull llama3.2",
+    examples=[
+        ex("স্ট্রিমিং চ্যাট",
+           "লোকাল মডেলের উত্তর শব্দে শব্দে আসে (stream=True), ChatGPT-এর মতো।",
+           '''import ollama
+
+stream = ollama.chat(
+    model="llama3.2",
+    messages=[{"role": "user", "content": "Give me 3 tips for learning Python fast."}],
+    stream=True,
+)
+for chunk in stream:
+    print(chunk["message"]["content"], end="", flush=True)
+print()'''),
+        ex("অফলাইনে পড়ার নোট তৈরির সহকারী",
+           "একটা অধ্যায়ের টেক্সট পড়ে লোকাল মডেল দিয়ে সারাংশ আর ৫টা ফ্ল্যাশকার্ড (প্রশ্ন-উত্তর JSON) বানায়, Markdown ফাইলে সেভ করে – পুরোটা অফলাইনে।",
+           '''import json
+from pathlib import Path
+import ollama
+
+MODEL = "llama3.2"
+chapter = Path("chapter.txt").read_text(encoding="utf-8")
+
+summary = ollama.chat(model=MODEL, messages=[
+    {"role": "system", "content": "You write short, clear study summaries."},
+    {"role": "user", "content": f"Summarise in 5 bullet points:\\n\\n{chapter}"},
+])["message"]["content"]
+
+cards_raw = ollama.chat(model=MODEL, format="json", messages=[
+    {"role": "user", "content": "Make 5 flashcards from this text. Reply as JSON: "
+                                '{"cards": [{"q": "...", "a": "..."}]}\\n\\n' + chapter},
+])["message"]["content"]
+cards = json.loads(cards_raw).get("cards", [])
+
+md = ["# Study notes", "", "## Summary", summary, "", "## Flashcards"]
+md += [f"{i}. **{c['q']}**  \\n   {c['a']}" for i, c in enumerate(cards, 1)]
+Path("study_notes.md").write_text("\\n".join(md), encoding="utf-8")
+print(summary)
+print(f"\\n{len(cards)}টা ফ্ল্যাশকার্ড সহ study_notes.md সেভ হয়েছে ✔")'''),
+    ],
+    level="শুরু", tag="নিজের কম্পিউটারে, অফলাইনে, বিনামূল্যে LLM চালানো।",
+    tasks=["গোপন ডেটায় AI (বাইরে যায় না)", "অফলাইন চ্যাট সহকারী", "লোকাল RAG", "JSON আউটপুট দিয়ে ডেটা বের করা"],
+    caps=["chat, generate, embed", "stream=True, format='json'", "মডেল pull/list/delete"],
+    limits=["ভালো ফলের জন্য ভালো RAM/GPU লাগে", "ছোট মডেল বড় ক্লাউড মডেলের চেয়ে কম দক্ষ"],
+    alt="llama-cpp-python, vllm, litellm",
+)
+
+pylib("llama-cpp-python",
+    about=("llama-cpp-python দিয়ে GGUF ফরম্যাটের ভাষা মডেল সরাসরি পাইথনের ভেতরে চালানো যায় – শুধু CPU দিয়েও। "
+           "আলাদা সার্ভার লাগে না; JSON আউটপুট, embedding আর OpenAI-ধাঁচের সার্ভারও আছে।"),
+    install="pip install llama-cpp-python\n# Hugging Face থেকে একটা ছোট .gguf মডেল ডাউনলোড করো (যেমন Qwen2.5-1.5B-Instruct-Q4_K_M.gguf)",
+    examples=[
+        ex("লোকাল মডেলে চ্যাট",
+           "একটা GGUF ফাইল লোড করে OpenAI-এর মতো create_chat_completion দিয়ে প্রশ্ন।",
+           '''from llama_cpp import Llama
+
+llm = Llama(model_path="models/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+            n_ctx=4096, n_threads=4, verbose=False)
+
+out = llm.create_chat_completion(messages=[
+    {"role": "system", "content": "You are a helpful tutor."},
+    {"role": "user", "content": "What is a Python dictionary? Answer in two sentences."},
+], max_tokens=150, temperature=0.3)
+print(out["choices"][0]["message"]["content"])'''),
+        ex("CPU-তে লোকাল ডকুমেন্ট ট্যাগার",
+           "docs ফোল্ডারের প্রতিটা ফাইলের প্রথম অংশ পড়ে মডেল বিষয়, ৩টা ট্যাগ আর এক লাইনের সারাংশ JSON-এ দেয়; সব মিলিয়ে tags.csv।",
+           '''import csv
+import json
+from pathlib import Path
+from llama_cpp import Llama
+
+llm = Llama(model_path="models/qwen2.5-1.5b-instruct-q4_k_m.gguf", n_ctx=4096, verbose=False)
+SCHEMA = {"type": "object", "properties": {
+    "topic": {"type": "string"},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "summary": {"type": "string"}}, "required": ["topic", "tags", "summary"]}
+
+rows = []
+for f in sorted(Path("docs").glob("*.txt")):
+    text = f.read_text(encoding="utf-8")[:3000]
+    out = llm.create_chat_completion(
+        messages=[{"role": "system", "content": "Tag documents. Reply only with JSON."},
+                  {"role": "user", "content": f"Give topic, 3 tags and a one-line summary:\\n\\n{text}"}],
+        response_format={"type": "json_object", "schema": SCHEMA},
+        temperature=0.1, max_tokens=200)
+    data = json.loads(out["choices"][0]["message"]["content"])
+    rows.append([f.name, data["topic"], ", ".join(data["tags"][:3]), data["summary"]])
+    print(f"✔ {f.name}: {data['topic']} | {', '.join(data['tags'][:3])}")
+
+with open("tags.csv", "w", newline="", encoding="utf-8") as fh:
+    csv.writer(fh).writerows([["file", "topic", "tags", "summary"], *rows])'''),
+    ],
+    level="মাঝারি", tag="পাইথনের ভেতরেই GGUF ভাষা মডেল, শুধু CPU দিয়েও।",
+    tasks=["অফলাইন ডকুমেন্ট ট্যাগিং", "গোপন ডেটায় সারাংশ", "লোকাল OpenAI-সামঞ্জস্য সার্ভার", "embedding তৈরি"],
+    caps=["create_chat_completion, JSON schema দিয়ে আউটপুট", "GPU offload (n_gpu_layers)", "python -m llama_cpp.server"],
+    limits=["ইনস্টলে কম্পাইল লাগে (প্রি-বিল্ট wheel আছে)", "মডেল ফাইল নিজে ডাউনলোড করতে হয়"],
+    alt="ollama, transformers, vllm",
+)
+
+pylib("peft",
+    about=("PEFT দিয়ে বিশাল ভাষা মডেলের সব ওজন না বদলে শুধু ছোট একটা অংশ (LoRA adapter) শেখানো যায় – প্রায় ১% প্যারামিটার। "
+           "ফলে সাধারণ GPU-তেও fine-tune সম্ভব, আর adapter ফাইল মাত্র কয়েক MB।"),
+    install="pip install peft transformers torch",
+    examples=[
+        ex("LoRA লাগিয়ে প্যারামিটার গোনা",
+           "GPT-2-তে LoRA adapter বসিয়ে দেখায় মোট প্যারামিটারের কত ভাগ আসলে শেখানো হবে।",
+           '''from peft import LoraConfig, TaskType, get_peft_model
+from transformers import AutoModelForCausalLM
+
+model = AutoModelForCausalLM.from_pretrained("gpt2")
+config = LoraConfig(task_type=TaskType.CAUSAL_LM, r=8, lora_alpha=16,
+                    lora_dropout=0.05, target_modules=["c_attn"])
+model = get_peft_model(model, config)
+model.print_trainable_parameters()
+# trainable params: ~294K || all params: ~124M || trainable%: ~0.24'''),
+        ex("লেকচার সারাংশের জন্য LoRA adapter",
+           "কয়েকটা (লেকচার → সারাংশ) জোড়া দিয়ে ছোট মডেলে LoRA শেখায়, সাধারণ PyTorch লুপে; শেষে শুধু adapter সেভ করে আর নতুন লেকচারে চেষ্টা করে।",
+           '''import torch
+from peft import LoraConfig, TaskType, get_peft_model
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+name = "Qwen/Qwen2.5-0.5B-Instruct"
+tok = AutoTokenizer.from_pretrained(name)
+model = get_peft_model(AutoModelForCausalLM.from_pretrained(name),
+                       LoraConfig(task_type=TaskType.CAUSAL_LM, r=16, lora_alpha=32,
+                                  target_modules=["q_proj", "v_proj"]))
+
+pairs = [  # আসল প্রজেক্টে শত শত জোড়া
+    ("Lecture: Photosynthesis converts light energy into chemical energy in chloroplasts...",
+     "Summary: Plants turn light into sugar inside chloroplasts."),
+    ("Lecture: Newton's second law states that force equals mass times acceleration...",
+     "Summary: F = m·a links force, mass and acceleration."),
+]
+texts = [f"{a}\\n{b}{tok.eos_token}" for a, b in pairs]
+
+opt = torch.optim.AdamW(model.parameters(), lr=2e-4)
+model.train()
+for epoch in range(20):
+    total = 0.0
+    for t in texts:
+        batch = tok(t, return_tensors="pt")
+        loss = model(**batch, labels=batch["input_ids"]).loss
+        loss.backward()
+        opt.step()
+        opt.zero_grad()
+        total += loss.item()
+    if epoch % 5 == 0:
+        print(f"epoch {epoch:2}  loss {total / len(texts):.3f}")
+
+model.save_pretrained("lecture-lora")            # শুধু কয়েক MB-র adapter
+model.eval()
+prompt = "Lecture: The water cycle moves water through evaporation, condensation and rain...\\nSummary:"
+ids = tok(prompt, return_tensors="pt")
+out = model.generate(**ids, max_new_tokens=30)
+print(tok.decode(out[0], skip_special_tokens=True))'''),
+    ],
+    level="উন্নত", tag="LoRA দিয়ে অল্প প্যারামিটারে বড় মডেল fine-tune।",
+    tasks=["নিজের বিষয়ে মডেলকে বিশেষজ্ঞ করা", "নির্দিষ্ট লেখার স্টাইল শেখানো", "এক মডেলে অনেক ছোট adapter"],
+    caps=["LoRA, QLoRA, IA3, prompt tuning", "transformers ও trl-এর সাথে সরাসরি", "adapter merge ও আলাদা লোড"],
+    limits=["তবুও GPU থাকলে অনেক ভালো", "ভালো ডেটা ছাড়া ফল খারাপ হয়"],
+    alt="transformers, trl, bitsandbytes",
+)
+
+pylib("diffusers",
+    about=("Diffusers হলো Hugging Face-এর ছবি তৈরির (text-to-image) লাইব্রেরি: লেখা দিলে Stable Diffusion-এর মতো মডেল ছবি আঁকে। "
+           "ছবি থেকে ছবি, ছবির অংশ বদলানো (inpainting), এমনকি ভিডিও তৈরির মডেলও আছে। GPU প্রায় অবশ্যই দরকার।"),
+    install="pip install diffusers transformers accelerate torch",
+    examples=[
+        ex("এক ধাপে ছবি তৈরি (SDXL-Turbo)",
+           "একটা লেখা থেকে মাত্র ১ ধাপে ৫১২×৫১২ ছবি – সবচেয়ে দ্রুত মডেলগুলোর একটা।",
+           '''import torch
+from diffusers import AutoPipelineForText2Image
+
+pipe = AutoPipelineForText2Image.from_pretrained(
+    "stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16").to("cuda")
+
+image = pipe(prompt="a cozy tea stall on a rainy evening in Dhaka, watercolor",
+             num_inference_steps=1, guidance_scale=0.0).images[0]
+image.save("tea_stall.png")'''),
+        ex("কাল্পনিক প্রাকৃতিক দৃশ্যের illustration generator",
+           "চারটা দৃশ্যের বর্ণনা, প্রতিটার নির্দিষ্ট seed (একই ছবি আবার পাওয়া যায়), শেষে ২×২ গ্রিড ছবি।",
+           '''import torch
+from diffusers import AutoPipelineForText2Image
+from diffusers.utils import make_image_grid
+
+pipe = AutoPipelineForText2Image.from_pretrained(
+    "stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16").to("cuda")
+
+style = "storybook illustration, soft light, highly detailed"
+scenes = ["misty tea gardens on rolling hills at sunrise",
+          "a mangrove forest with a tiger drinking from the river",
+          "fishing boats on a calm river under a giant moon",
+          "a village with yellow mustard fields and a red kite in the sky"]
+
+images = []
+for i, scene in enumerate(scenes):
+    g = torch.Generator("cuda").manual_seed(100 + i)
+    img = pipe(prompt=f"{scene}, {style}", num_inference_steps=2,
+               guidance_scale=0.0, generator=g).images[0]
+    img.save(f"scene_{i + 1}.png")
+    images.append(img)
+
+make_image_grid(images, rows=2, cols=2).save("scenes_grid.png")
+print("scenes_grid.png সেভ হয়েছে ✔")'''),
+    ],
+    level="মাঝারি", tag="লেখা থেকে ছবি: Stable Diffusion ও অন্যান্য diffusion মডেল।",
+    tasks=["ইলাস্ট্রেশন ও কনসেপ্ট আর্ট", "ছবির অংশ বদলানো (inpainting)", "ছবি থেকে নতুন ছবি", "ছোট ভিডিও তৈরি"],
+    caps=["শত শত তৈরি মডেল ও scheduler", "LoRA দিয়ে নিজের স্টাইল", "CPU offload দিয়ে কম VRAM-এ"],
+    limits=["GPU (৬ GB+) প্রায় অবশ্যই দরকার", "মডেলের লাইসেন্স মিলিয়ে ব্যবহার করো"],
+    alt="transformers, peft",
+)
+
+pylib("faiss",
+    about=("FAISS (Meta) দিয়ে লাখ-কোটি ভেক্টরের মধ্যে সবচেয়ে কাছেরগুলো মিলিসেকেন্ডে খোঁজা যায়। semantic search, ছবি খোঁজা, "
+           "সুপারিশ – যেখানেই embedding আছে, সেখানে দ্রুত খোঁজার ইঞ্জিন।"),
+    install="pip install faiss-cpu numpy",
+    examples=[
+        ex("১০ লাখ ভেক্টরে নিকটতম প্রতিবেশী",
+           "১০ লাখ ১২৮-মাত্রার ভেক্টর; IndexFlatL2 দিয়ে হুবহু খোঁজা আর IVF index দিয়ে অনেক দ্রুত আনুমানিক খোঁজা – সময় তুলনা।",
+           '''import time
+import numpy as np
+import faiss
+
+d, n = 128, 1_000_000
+rng = np.random.default_rng(0)
+data = rng.random((n, d), dtype=np.float32)
+queries = rng.random((5, d), dtype=np.float32)
+
+flat = faiss.IndexFlatL2(d)
+flat.add(data)
+t = time.perf_counter(); D, I = flat.search(queries, 5)
+print(f"Flat (exact): {time.perf_counter() - t:.3f}s  →", I[0])
+
+quant = faiss.IndexFlatL2(d)
+ivf = faiss.IndexIVFFlat(quant, d, 1024)          # ১০২৪টা খোপে ভাগ
+ivf.train(data[:100_000])
+ivf.add(data)
+ivf.nprobe = 16                                   # কয়টা খোপে খুঁজবে
+t = time.perf_counter(); D2, I2 = ivf.search(queries, 5)
+print(f"IVF (approx): {time.perf_counter() - t:.3f}s  →", I2[0])'''),
+        ex("হাজারো ক্যাপশন থেকে মিলযুক্ত ক্যাপশন",
+           "sentence-transformers দিয়ে ক্যাপশনের embedding, FAISS-এ inner-product index, প্রশ্ন দিলে অর্থে কাছের ক্যাপশন; index ফাইলে সেভ।",
+           '''import faiss
+from sentence_transformers import SentenceTransformer
+
+captions = [
+    "Flood map of the Jamuna river, August 2024",
+    "Population density of Dhaka by ward",
+    "Mangrove cover change in the Sundarbans 2000–2025",
+    "Rainfall anomaly over Sylhet during the monsoon",
+    "Road network and bus routes in Chattogram",
+    "Rice yield by district, Boro season",
+]
+model = SentenceTransformer("all-MiniLM-L6-v2")
+emb = model.encode(captions, normalize_embeddings=True).astype("float32")
+
+index = faiss.IndexFlatIP(emb.shape[1])           # normalized → inner product = cosine
+index.add(emb)
+faiss.write_index(index, "captions.index")
+
+for q in ["forest loss near the coast", "where do most people live", "crops"]:
+    qv = model.encode([q], normalize_embeddings=True).astype("float32")
+    scores, ids = index.search(qv, 2)
+    print(f"\\n🔎 {q}")
+    for s, i in zip(scores[0], ids[0]):
+        print(f"  {s:.2f}  {captions[i]}")'''),
+    ],
+    level="মাঝারি", tag="বিশাল ভেক্টর সংগ্রহে অতি-দ্রুত মিল খোঁজা।",
+    tasks=["semantic search ইঞ্জিন", "ছবি দিয়ে ছবি খোঁজা", "সুপারিশ ব্যবস্থা", "RAG-এর vector store"],
+    caps=["Flat, IVF, HNSW, PQ ইত্যাদি index", "GPU সংস্করণ (faiss-gpu)", "index ফাইলে সেভ/লোড"],
+    limits=["metadata ফিল্টার নিজে সামলাতে হয় (Chroma/Qdrant-এ আছে)", "সঠিক index বাছাই শিখতে হয়"],
+    alt="chromadb, qdrant-client, pymilvus",
+)
+
+pylib("chromadb",
+    about=("Chroma হলো সহজ embedding ডেটাবেস: লেখা দিলে নিজেই embedding বানায়, metadata-সহ রাখে, আর অর্থ দিয়ে খোঁজে – "
+           "সাথে metadata ফিল্টার (যেমন বছর = ২০২৫)। ডিস্কে সেভ থাকে, আলাদা সার্ভার লাগে না।"),
+    install="pip install chromadb",
+    examples=[
+        ex("নোট রাখা ও অর্থ দিয়ে খোঁজা",
+           "কয়েকটা নোট যোগ করে প্রশ্ন দিয়ে খোঁজা – Chroma নিজেই embedding বানায় (প্রথমবার ছোট মডেল ডাউনলোড)।",
+           '''import chromadb
+
+client = chromadb.Client()                     # মেমোরিতে; ডিস্কে রাখতে PersistentClient
+notes = client.get_or_create_collection("notes")
+notes.add(
+    ids=["n1", "n2", "n3", "n4"],
+    documents=["Buy rice, lentils and onions",
+               "Python class: list comprehensions and dictionaries",
+               "Call the electrician about the fan",
+               "Read chapter 3 on neural networks"],
+)
+res = notes.query(query_texts=["study machine learning"], n_results=2)
+for doc, dist in zip(res["documents"][0], res["distances"][0]):
+    print(f"{dist:.3f}  {doc}")'''),
+        ex("লোকাল গবেষণা নোটের semantic index (ফিল্টারসহ)",
+           "notes ফোল্ডারের সব .md ফাইল ডিস্কে সেভ থাকা ডেটাবেসে রাখে (বছর ও বিষয় metadata সহ); পরে অর্থ দিয়ে খোঁজা যায়, বছর দিয়ে ফিল্টারও।",
+           '''from pathlib import Path
+import chromadb
+
+client = chromadb.PersistentClient(path="research_db")
+col = client.get_or_create_collection("research_notes", metadata={"hnsw:space": "cosine"})
+
+for f in Path("notes").glob("*.md"):            # ফাইলের নাম: 2025_flood_mapping.md
+    year, topic = f.stem.split("_", 1)
+    col.upsert(ids=[f.stem], documents=[f.read_text(encoding="utf-8")],
+               metadatas=[{"year": int(year), "topic": topic, "file": f.name}])
+print("মোট নোট:", col.count())
+
+def search(q, year=None, k=3):
+    res = col.query(query_texts=[q], n_results=k, where={"year": year} if year else None)
+    print(f"\\n🔎 {q}" + (f"  (year={year})" if year else ""))
+    for meta, dist in zip(res["metadatas"][0], res["distances"][0]):
+        print(f"  {1 - dist:.2f}  {meta['file']}")
+
+search("satellite images of water")
+search("statistics methods", year=2025)'''),
+    ],
+    level="শুরু", tag="সহজ embedding ডেটাবেস: যোগ করো, অর্থ দিয়ে খোঁজো, metadata দিয়ে ফিল্টার করো।",
+    tasks=["লোকাল RAG-এর মেমোরি", "নোট ও ডকুমেন্ট semantic search", "চ্যাটবটের দীর্ঘমেয়াদি স্মৃতি"],
+    caps=["নিজে থেকে embedding (বা নিজের embedding দাও)", "where দিয়ে metadata ফিল্টার", "PersistentClient বা সার্ভার মোড"],
+    limits=["কোটি ভেক্টরে Milvus/Qdrant বেশি উপযুক্ত"],
+    alt="faiss, qdrant-client, pymilvus",
+)
+
+pylib("tiktoken",
+    about=("tiktoken হলো OpenAI-এর দ্রুত tokenizer: কোনো লেখা মডেলের কাছে কয়টা token হবে গুনে দেয়। API খরচ আর context-এর "
+           "সীমা আগেই হিসাব করতে, বা লম্বা লেখা ঠিক মাপে টুকরো করতে দরকার।"),
+    install="pip install tiktoken",
+    examples=[
+        ex("টোকেন গোনা ও দেখা",
+           "একটা বাক্য কোন কোন টুকরোয় ভাঙে আর বাংলা লেখায় কেন বেশি token লাগে।",
+           '''import tiktoken
+
+enc = tiktoken.get_encoding("o200k_base")       # GPT-4o ধাঁচের মডেলের encoding
+for text in ["Python is fun to learn!", "পাইথন শেখা মজার!"]:
+    ids = enc.encode(text)
+    pieces = [enc.decode([i]) for i in ids]
+    print(f"{len(ids):2} tokens  {text}")
+    print("          ", pieces)'''),
+        ex("API request পাঠানোর আগে token-budget calculator",
+           "একটা লম্বা ডকুমেন্টের token গুনে আনুমানিক খরচ দেখায়, আর context-এর সীমা ছাড়ালে প্যারাগ্রাফ না ভেঙে ঠিক মাপের টুকরো বানায়।",
+           '''import tiktoken
+
+enc = tiktoken.get_encoding("o200k_base")
+PRICE_PER_1M_INPUT = 0.40          # উদাহরণ মূল্য (USD); আসল দাম provider-এর সাইটে দেখো
+MAX_TOKENS_PER_CHUNK = 800
+
+# আসল প্রজেক্টে: text = open("report.txt", encoding="utf-8").read()
+text = "\\n\\n".join(f"Paragraph {i}: " + "Monsoon rainfall data was analysed for trends. " * 25
+                     for i in range(1, 13))
+
+total = len(enc.encode(text))
+print(f"মোট token: {total:,}")
+print(f"আনুমানিক ইনপুট খরচ: ${total / 1e6 * PRICE_PER_1M_INPUT:.4f}")
+
+chunks, current, size = [], [], 0
+for para in text.split("\\n\\n"):
+    n = len(enc.encode(para))
+    if current and size + n > MAX_TOKENS_PER_CHUNK:
+        chunks.append("\\n\\n".join(current))
+        current, size = [], 0
+    current.append(para)
+    size += n
+if current:
+    chunks.append("\\n\\n".join(current))
+
+for i, c in enumerate(chunks, 1):
+    print(f"chunk {i}: {len(enc.encode(c)):4} tokens, {c.count('Paragraph')} paragraphs")'''),
+    ],
+    level="শুরু", tag="লেখা কয়টা token, আগেই গুনে খরচ ও সীমা হিসাব।",
+    tasks=["API খরচের হিসাব", "context সীমার ভেতরে টুকরো করা", "প্রম্পট ছোট করা"],
+    caps=["cl100k_base, o200k_base ইত্যাদি encoding", "encoding_for_model()", "Rust-এ লেখা, খুব দ্রুত"],
+    limits=["শুধু OpenAI মডেলের হিসাব হুবহু; অন্য মডেলের tokenizer আলাদা"],
+    alt="transformers, openai",
+)
+
+pylib("onnxruntime",
+    about=("ONNX Runtime দিয়ে যেকোনো ফ্রেমওয়ার্কে (PyTorch, TensorFlow, scikit-learn) বানানো মডেল ONNX ফরম্যাটে রপ্তানি করে "
+           "দ্রুত চালানো যায় – Windows, Linux, মোবাইল, ব্রাউজার সবখানে, CPU বা GPU-তে।"),
+    install="pip install onnxruntime\n# মডেল রপ্তানির জন্য: pip install torch (torch.onnx.export) বা skl2onnx",
+    examples=[
+        ex("PyTorch মডেল রপ্তানি করে ONNX Runtime-এ চালানো",
+           "ছোট একটা নিউরাল নেটওয়ার্ক model.onnx ফাইলে রপ্তানি, তারপর torch ছাড়াই onnxruntime দিয়ে একই ফল।",
+           '''import numpy as np
+import onnxruntime as ort
+import torch
+
+net = torch.nn.Sequential(torch.nn.Linear(4, 16), torch.nn.ReLU(), torch.nn.Linear(16, 3))
+net.eval()
+dummy = torch.randn(1, 4)
+torch.onnx.export(net, dummy, "model.onnx", input_names=["x"], output_names=["y"],
+                  dynamic_axes={"x": {0: "batch"}, "y": {0: "batch"}})
+
+sess = ort.InferenceSession("model.onnx", providers=["CPUExecutionProvider"])
+x = np.random.rand(5, 4).astype(np.float32)
+onnx_out = sess.run(None, {"x": x})[0]
+torch_out = net(torch.from_numpy(x)).detach().numpy()
+print("ফল মিলেছে?", np.allclose(onnx_out, torch_out, atol=1e-5))'''),
+        ex("মডেল latency বেঞ্চমার্ক",
+           "একটা ONNX ছবি-classifier-এর ইনপুট নিজে থেকে বুঝে নেয়, তারপর ব্যাচ মাপ ১, ৮, ৩২-এ গড় সময় ও প্রতি সেকেন্ডে কয়টা ছবি – টেবিলে।",
+           '''import time
+import numpy as np
+import onnxruntime as ort
+
+sess = ort.InferenceSession("classifier.onnx", providers=ort.get_available_providers())
+inp = sess.get_inputs()[0]
+print("ইনপুট:", inp.name, inp.shape, "| provider:", sess.get_providers()[0])
+
+shape = [d if isinstance(d, int) else 1 for d in inp.shape]
+print(f"{'batch':>6}{'ms/run':>10}{'images/s':>11}")
+for batch in (1, 8, 32):
+    shape[0] = batch
+    x = np.random.rand(*shape).astype(np.float32)
+    for _ in range(3):                         # warm-up
+        sess.run(None, {inp.name: x})
+    runs, t = 20, time.perf_counter()
+    for _ in range(runs):
+        sess.run(None, {inp.name: x})
+    ms = (time.perf_counter() - t) / runs * 1000
+    print(f"{batch:6}{ms:10.1f}{batch / ms * 1000:11.0f}")'''),
+    ],
+    level="মাঝারি", tag="যেকোনো ফ্রেমওয়ার্কের মডেল দ্রুত, সবখানে চালানো।",
+    tasks=["প্রোডাকশনে দ্রুত inference", "PyTorch ছাড়া হালকা ডিপ্লয়", "মোবাইল/ব্রাউজারে মডেল", "লেটেন্সি বেঞ্চমার্ক"],
+    caps=["CPU, CUDA, DirectML, CoreML ইত্যাদি provider", "graph optimization ও quantization", "C, C#, Java, JS API"],
+    limits=["সব অপারেশন রপ্তানি হয় না", "মডেল রপ্তানির জন্য আলাদা টুল লাগে"],
+    alt="openvino, tensorrt-llm, transformers",
+)
+
+# ---------------- TensorFlow.js – ব্রাউজারে লাইভ ----------------
+CDN["tfjs"] = ["https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"]
+
+jslib("TensorFlow.js",
+    about=("TensorFlow.js দিয়ে ব্রাউজারের ভেতরেই নিউরাল নেটওয়ার্ক বানানো, শেখানো আর চালানো যায় – সার্ভার লাগে না, "
+           "ডেটা কম্পিউটারের বাইরে যায় না। GPU থাকলে WebGL দিয়ে দ্রুত চলে। নিচের ডেমোগুলো সত্যিই তোমার ব্রাউজারে শিখছে।"),
+    install='npm install @tensorflow/tfjs\n<!-- অথবা: <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script> -->',
+    examples=[
+        jsex("tfjs", "লাইভ: নিউরাল নেটওয়ার্ক একটা বাঁকা রেখা শিখছে",
+             "noisy বিন্দু থেকে একটা ছোট নেটওয়ার্ক sin-এর মতো বক্ররেখা শেখে; প্রতিটা epoch-এ লাল রেখা আপডেট হয়, নিচে loss কমতে দেখা যায়।",
+             '''const app = document.getElementById("app");
+const cv = document.createElement("canvas");
+cv.width = app.clientWidth * 2; cv.height = app.clientHeight * 2;
+cv.style.width = "100%"; cv.style.height = "100%";
+app.append(cv);
+const ctx = cv.getContext("2d"), W = cv.width, H = cv.height;
+
+let seed = 7;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const xs = [], ys = [];
+for (let i = 0; i < 160; i++) {
+  const x = rand() * 2 - 1;
+  xs.push(x); ys.push(Math.sin(x * 3.2) * 0.7 + (rand() - 0.5) * 0.25);
+}
+
+const model = tf.sequential();
+model.add(tf.layers.dense({ units: 32, activation: "tanh", inputShape: [1] }));
+model.add(tf.layers.dense({ units: 32, activation: "tanh" }));
+model.add(tf.layers.dense({ units: 1 }));
+model.compile({ optimizer: tf.train.adam(0.02), loss: "meanSquaredError" });
+
+const px = x => (x + 1) / 2 * (W - 80) + 40;
+const py = y => H * 0.42 - y * H * 0.36;
+const grid = Array.from({ length: 200 }, (_, i) => -1 + 2 * i / 199);
+const losses = [];
+
+function draw(epoch) {
+  ctx.fillStyle = "#faf7ff"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#7c3aed";
+  xs.forEach((x, i) => { ctx.beginPath(); ctx.arc(px(x), py(ys[i]), 6, 0, 7); ctx.fill(); });
+  const pred = tf.tidy(() => model.predict(tf.tensor2d(grid, [200, 1])).dataSync());
+  ctx.strokeStyle = "#e11d48"; ctx.lineWidth = 6; ctx.beginPath();
+  grid.forEach((x, i) => i ? ctx.lineTo(px(x), py(pred[i])) : ctx.moveTo(px(x), py(pred[i])));
+  ctx.stroke();
+  const top = H * 0.8, h = H * 0.16, max = Math.max(...losses, 0.01);
+  ctx.strokeStyle = "#0d9488"; ctx.lineWidth = 4; ctx.beginPath();
+  losses.forEach((l, i) => {
+    const x = 40 + i / 150 * (W - 80), y = top + h - l / max * h;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.stroke();
+  ctx.fillStyle = "#140e29"; ctx.font = `bold ${H * 0.045}px system-ui`;
+  ctx.fillText(`epoch ${epoch}   loss ${(losses.at(-1) || 0).toFixed(4)}`, 40, H * 0.07);
+}
+
+(async () => {
+  const X = tf.tensor2d(xs, [xs.length, 1]), Y = tf.tensor2d(ys, [ys.length, 1]);
+  await model.fit(X, Y, { epochs: 150, batchSize: 32, shuffle: true,
+    callbacks: { onEpochEnd: async (e, logs) => { losses.push(logs.loss); draw(e + 1); await tf.nextFrame(); } } });
+})();''', hint="চোখের সামনে শিখছে – ↻ চাপলে আবার শুরু"),
+        jsex("tfjs", "লাইভ: স্পাইরাল ক্লাসিফায়ার ও সিদ্ধান্ত-সীমা",
+             "দুই রঙের পেঁচানো বিন্দু আলাদা করতে নেটওয়ার্ক শেখে; পেছনের রঙিন এলাকা (decision boundary) প্রতি কয়েক epoch-এ নতুন করে আঁকা হয়।",
+             '''const app = document.getElementById("app");
+const cv = document.createElement("canvas");
+const S = Math.min(app.clientWidth, app.clientHeight) * 2;
+cv.width = cv.height = S; cv.style.height = "100%"; cv.style.display = "block"; cv.style.margin = "auto";
+app.append(cv);
+const ctx = cv.getContext("2d");
+
+const pts = [], labels = [];
+for (let c = 0; c < 2; c++) {
+  for (let i = 0; i < 150; i++) {
+    const r = i / 150, t = i / 150 * 3.5 * Math.PI + c * Math.PI;
+    pts.push([r * Math.cos(t) + (Math.sin(i * 12.9) * 0.04), r * Math.sin(t) + (Math.cos(i * 7.3) * 0.04)]);
+    labels.push(c);
+  }
+}
+const model = tf.sequential();
+model.add(tf.layers.dense({ units: 24, activation: "relu", inputShape: [2] }));
+model.add(tf.layers.dense({ units: 24, activation: "relu" }));
+model.add(tf.layers.dense({ units: 1, activation: "sigmoid" }));
+model.compile({ optimizer: tf.train.adam(0.03), loss: "binaryCrossentropy", metrics: ["accuracy"] });
+
+const N = 60, cells = [];
+for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) cells.push([-1.1 + 2.2 * i / (N - 1), -1.1 + 2.2 * j / (N - 1)]);
+const toPx = v => (v + 1.1) / 2.2 * S;
+
+function draw(epoch, acc) {
+  const p = tf.tidy(() => model.predict(tf.tensor2d(cells)).dataSync());
+  const cell = S / N + 1;
+  cells.forEach(([x, y], k) => {
+    const v = p[k];
+    ctx.fillStyle = `rgb(${Math.round(124 + (225 - 124) * v)},${Math.round(58 + (29 - 58) * v)},${Math.round(237 + (72 - 237) * v)})`;
+    ctx.globalAlpha = 0.35; ctx.fillRect(toPx(x) - cell / 2, toPx(y) - cell / 2, cell, cell);
+  });
+  ctx.globalAlpha = 1;
+  pts.forEach(([x, y], k) => {
+    ctx.fillStyle = labels[k] ? "#e11d48" : "#7c3aed";
+    ctx.beginPath(); ctx.arc(toPx(x), toPx(y), S / 110, 0, 7); ctx.fill();
+    ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke();
+  });
+  ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.fillRect(0, 0, S, S * 0.08);
+  ctx.fillStyle = "#140e29"; ctx.font = `bold ${S * 0.04}px system-ui`;
+  ctx.fillText(`epoch ${epoch}   accuracy ${(acc * 100).toFixed(0)}%`, S * 0.03, S * 0.055);
+}
+
+(async () => {
+  const X = tf.tensor2d(pts), Y = tf.tensor2d(labels, [labels.length, 1]);
+  await model.fit(X, Y, { epochs: 200, batchSize: 32, shuffle: true,
+    callbacks: { onEpochEnd: async (e, logs) => { if (e % 4 === 0 || e === 199) draw(e + 1, logs.acc); await tf.nextFrame(); } } });
+})();''', hint="পেছনের রং কীভাবে বদলায় দেখো"),
+    ],
+    level="মাঝারি", tag="ব্রাউজারেই নিউরাল নেটওয়ার্ক বানানো, শেখানো আর চালানো।",
+    tasks=["ওয়েবপেজে লাইভ ML ডেমো", "ওয়েবক্যামে হাত/মুখ শনাক্ত", "Python-এ শেখানো মডেল ব্রাউজারে চালানো", "গোপন ডেটা সার্ভারে না পাঠিয়ে inference"],
+    caps=["Layers API (Keras-এর মতো)", "WebGL/WebGPU দিয়ে GPU ত্বরণ", "তৈরি মডেল: MobileNet, PoseNet, COCO-SSD", "Keras মডেল রূপান্তর"],
+    limits=["বড় মডেল ট্রেনিংয়ে Python-এর চেয়ে ধীর", "মোবাইলে মেমোরি সীমিত"],
+    alt="ONNX Runtime Web, Transformers.js, brain.js",
+)

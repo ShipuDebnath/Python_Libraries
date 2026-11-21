@@ -42,6 +42,12 @@ NEEDS_NET = {
     "selenium": "ইন্টারনেট/ব্রাউজার লাগে", "django": "সার্ভার হিসেবে চলে",
     "tensorflow": "ডেটা ডাউনলোড ও লম্বা ট্রেনিং", "keras": "ডেটা ডাউনলোড ও লম্বা ট্রেনিং",
     "spacy": "ভাষা মডেল ডাউনলোড লাগে", "nltk": "ডেটা ডাউনলোড লাগে",
+    "onnxruntime": "PyTorch আর একটা .onnx মডেল ফাইল লাগে",
+    "sentence-transformers": "মডেল ডাউনলোড লাগে", "llama-index": "API key লাগে",
+    "litellm": "API key লাগে", "ollama": "Ollama অ্যাপ ও মডেল লাগে",
+    "llama-cpp-python": ".gguf মডেল ফাইল লাগে", "peft": "মডেল ডাউনলোড ও GPU লাগে",
+    "diffusers": "GPU ও মডেল ডাউনলোড লাগে", "chromadb": "embedding মডেল ডাউনলোড লাগে",
+    "tiktoken": "encoding ফাইল ডাউনলোড লাগে",
 }
 NEEDS_NET_EX = {("playwright", 0): "ইন্টারনেট লাগে"}
 SERVER_TESTS = {
