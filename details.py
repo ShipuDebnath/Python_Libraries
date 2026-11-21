@@ -5964,3 +5964,515 @@ ax.set_title("Sample stock: trend, volatility and volume", loc="left", fontsize=
 plt.tight_layout()
 plt.show()''', hint=SHOW),
 )
+
+
+# ==================================================================
+# ভিজুয়ালাইজেশন ক্যাটাগরির বাকি Python লাইব্রেরি
+# ==================================================================
+
+def pylib(name, about, install, examples, **manual):
+    DETAILS[name] = dict(about=about, install=install, examples=list(examples))
+    if manual:
+        man(name, **manual)
+
+
+pylib("bokeh",
+    about=("Bokeh দিয়ে পাইথন থেকে ব্রাউজারে চলা ইন্টারঅ্যাকটিভ চার্ট বানানো যায়: জুম, প্যান, হোভার টুলটিপ, "
+           "একাধিক চার্টে একসাথে বাছাই (linked brushing)। আউটপুট একটা HTML ফাইল, বা Bokeh সার্ভারে লাইভ অ্যাপ।"),
+    install="pip install bokeh",
+    examples=[
+        ex("হোভার টুলটিপসহ লাইন চার্ট",
+           "দুই শহরের মাসিক তাপমাত্রা; মাউস রাখলে মাস ও মান দেখায়, চাকা ঘুরিয়ে জুম, লেজেন্ডে চাপলে লাইন লুকায়।",
+           '''from bokeh.models import HoverTool
+from bokeh.plotting import figure, output_file, show
+
+months = list(range(1, 13))
+dhaka = [19, 22, 27, 30, 31, 30, 29, 29, 29, 28, 24, 20]
+sylhet = [18, 20, 24, 26, 27, 28, 28, 28, 28, 26, 22, 19]
+
+p = figure(title="Monthly temperature", width=750, height=380,
+           x_axis_label="Month", y_axis_label="°C",
+           tools="pan,wheel_zoom,box_zoom,reset,save")
+for name, ys, color in [("Dhaka", dhaka, "#7c3aed"), ("Sylhet", sylhet, "#0d9488")]:
+    p.line(months, ys, line_width=3, color=color, legend_label=name)
+    p.scatter(months, ys, size=9, color=color, legend_label=name)
+
+p.add_tools(HoverTool(tooltips=[("Month", "@x"), ("Temp", "@y °C")]))
+p.legend.click_policy = "hide"
+p.legend.location = "top_left"
+
+output_file("temperature.html")
+show(p)                      # ব্রাউজারে খুলবে'''),
+        ex("লিংক করা ব্রাশিং",
+           "একই ডেটা দুই চার্টে; বাঁ চার্টে lasso বা box দিয়ে কিছু বিন্দু বাছাই করলে ডান চার্টেও সেগুলো আলোকিত হয় (ColumnDataSource ভাগাভাগি)।",
+           '''import numpy as np
+from bokeh.layouts import gridplot
+from bokeh.models import ColumnDataSource
+from bokeh.plotting import figure, output_file, show
+
+rng = np.random.default_rng(0)
+n = 400
+hours = rng.uniform(0, 10, n)
+source = ColumnDataSource(dict(
+    hours=hours,
+    marks=40 + 5 * hours + rng.normal(0, 7, n),
+    sleep=8.5 - 0.3 * hours + rng.normal(0, 0.8, n),
+))
+
+tools = "box_select,lasso_select,reset,help"
+left = figure(width=420, height=400, tools=tools, title="Study hours vs marks")
+left.scatter("hours", "marks", source=source, size=7, alpha=0.7, color="#7c3aed",
+             selection_color="#e11d48", nonselection_alpha=0.15)
+
+right = figure(width=420, height=400, tools=tools, title="Study hours vs sleep",
+               x_range=left.x_range)
+right.scatter("hours", "sleep", source=source, size=7, alpha=0.7, color="#0d9488",
+              selection_color="#e11d48", nonselection_alpha=0.15)
+
+output_file("linked_brushing.html")
+show(gridplot([[left, right]]))'''),
+    ],
+    level="মাঝারি", tag="পাইথন থেকে ব্রাউজারের ইন্টারঅ্যাকটিভ চার্ট ও ড্যাশবোর্ড।",
+    tasks=["ইন্টারঅ্যাকটিভ HTML রিপোর্ট", "লিংক করা চার্ট ও ব্রাশিং", "স্ট্রিমিং ডেটার লাইভ চার্ট (Bokeh server)", "ম্যাপ টাইল ও জিও ডেটা"],
+    caps=["হোভার, জুম, প্যান, সিলেক্ট টুল", "ColumnDataSource দিয়ে চার্টের মধ্যে ডেটা ভাগাভাগি", "স্লাইডার, ড্রপডাউন উইজেট ও JavaScript callback"],
+    limits=["স্থির ছবি (PNG) সেভে Selenium/ব্রাউজার লাগে", "খুব বেশি বিন্দুতে ধীর – Datashader দিয়ে জোড়া লাগাও"],
+    alt="plotly, holoviews, altair",
+)
+
+pylib("holoviews",
+    about=("HoloViews-এ চার্ট আঁকার বদলে ডেটাকে বর্ণনা করো: 'এটা একটা Curve', 'এটা Scatter' – বাকিটা নিজে হয়। "
+           "* দিয়ে স্তর (overlay), + দিয়ে পাশাপাশি; স্লাইডারসহ অ্যানিমেশন খুব সহজে। Bokeh বা Matplotlib দিয়ে আঁকে।"),
+    install="pip install holoviews bokeh",
+    examples=[
+        ex("Overlay ও Layout",
+           "একটা রেখা আর বিন্দু উপরে-নিচে মেশানো (*), পাশে আলাদা হিস্টোগ্রাম (+) – মাত্র কয়েক লাইনে।",
+           '''import numpy as np
+import holoviews as hv
+hv.extension("bokeh")
+
+x = np.linspace(0, 4 * np.pi, 200)
+rng = np.random.default_rng(1)
+noisy = np.sin(x) + rng.normal(0, 0.25, x.size)
+
+curve = hv.Curve((x, np.sin(x)), "x", "y", label="sin(x)").opts(color="#7c3aed", line_width=3)
+points = hv.Scatter((x, noisy), "x", "y", label="measured").opts(color="#d97706", size=5, alpha=0.6)
+hist = hv.Histogram(np.histogram(noisy - np.sin(x), bins=30), kdims="error").opts(color="#0d9488")
+
+layout = (curve * points).opts(width=520, height=340, title="Signal + noise") + \\
+         hist.opts(width=320, height=340, title="Error distribution")
+hv.save(layout, "overlay_layout.html")'''),
+        ex("স্লাইডারসহ HoloMap",
+           "বিভিন্ন কম্পাঙ্কের তরঙ্গ একটা HoloMap-এ; HTML-এ নিচে স্লাইডার আসে, টানলে চার্ট বদলায়।",
+           '''import numpy as np
+import holoviews as hv
+hv.extension("bokeh")
+
+x = np.linspace(0, 2 * np.pi, 300)
+waves = {f: hv.Curve((x, np.sin(f * x) * np.exp(-x / 6)), "t", "amplitude")
+             .opts(color="#7c3aed", line_width=3, width=650, height=320, ylim=(-1.1, 1.1))
+         for f in [1, 2, 3, 4, 5, 6]}
+
+hmap = hv.HoloMap(waves, kdims="frequency").opts(title="Damped wave")
+hv.save(hmap, "wave_slider.html", widget_location="bottom")'''),
+    ],
+    level="মাঝারি", tag="ডেটাকে বর্ণনা করো, চার্ট নিজে তৈরি হয়; স্লাইডার ও লেআউট খুব সহজ।",
+    tasks=["বহুমাত্রিক ডেটা এক্সপ্লোরেশন", "স্লাইডার দিয়ে প্যারামিটার বদলানো চার্ট", "Datashader-এর সাথে বিশাল ডেটা", "Panel দিয়ে ড্যাশবোর্ড"],
+    caps=["Element: Curve, Scatter, Image, HeatMap…", "* overlay, + layout, HoloMap, DynamicMap", "Bokeh, Matplotlib, Plotly তিন ব্যাকএন্ড"],
+    limits=["opts() সিস্টেম শিখতে সময় লাগে", "খুব নির্দিষ্ট ডিজাইনে Bokeh-এ নামতে হয়"],
+    alt="hvplot, bokeh, plotly",
+)
+
+pylib("hvplot",
+    about=("hvPlot দিয়ে pandas-এর পরিচিত .plot() এর মতোই লিখে ইন্টারঅ্যাকটিভ চার্ট পাওয়া যায়: df.hvplot.line(...)। "
+           "groupby দিলেই ড্রপডাউন/স্লাইডার তৈরি হয়। ভেতরে HoloViews ও Bokeh চলে।"),
+    install="pip install hvplot pandas",
+    examples=[
+        ex("pandas থেকে এক লাইনে ইন্টারঅ্যাকটিভ লাইন চার্ট",
+           "তিন সেন্সরের দৈনিক রিডিং; df.hvplot.line একটা ইন্টারঅ্যাকটিভ চার্ট দেয় যাতে জুম আর হোভার আছে।",
+           '''import numpy as np
+import pandas as pd
+import hvplot.pandas  # noqa: F401  (df.hvplot চালু করে)
+import hvplot
+
+rng = np.random.default_rng(2)
+dates = pd.date_range("2026-01-01", periods=180)
+df = pd.DataFrame({
+    "Room A": 24 + np.cumsum(rng.normal(0, 0.3, 180)),
+    "Room B": 22 + np.cumsum(rng.normal(0, 0.3, 180)),
+    "Room C": 26 + np.cumsum(rng.normal(0, 0.3, 180)),
+}, index=dates)
+
+plot = df.hvplot.line(title="Sensor readings (°C)", ylabel="°C", width=800, height=350,
+                      line_width=2, color=["#7c3aed", "#0d9488", "#e11d48"])
+hvplot.save(plot, "sensors.html")'''),
+        ex("groupby দিয়ে ড্রপডাউন",
+           "বছর অনুযায়ী মাসিক বৃষ্টি; groupby='year' দিলে নিজে থেকে বছর বাছার উইজেট আসে।",
+           '''import numpy as np
+import pandas as pd
+import hvplot.pandas  # noqa: F401
+import hvplot
+
+rng = np.random.default_rng(3)
+monsoon = np.array([5, 20, 50, 120, 250, 350, 400, 330, 280, 150, 30, 10])
+rows = [dict(year=y, month=m + 1, rain=max(0, monsoon[m] * rng.uniform(0.7, 1.3)))
+        for y in range(2020, 2027) for m in range(12)]
+df = pd.DataFrame(rows)
+
+plot = df.hvplot.bar(x="month", y="rain", groupby="year", color="#7c3aed",
+                     title="Monthly rainfall (mm)", width=700, height=350)
+hvplot.save(plot, "rain_by_year.html")'''),
+    ],
+    level="শুরু", tag="pandas-এর .plot()-এর মতো লিখে ইন্টারঅ্যাকটিভ চার্ট।",
+    tasks=["DataFrame দ্রুত এক্সপ্লোর", "groupby দিয়ে উইজেটওয়ালা চার্ট", "xarray, geopandas, Dask ডেটা প্লট"],
+    caps=["line, bar, scatter, hist, kde, heatmap…", "datashade=True দিয়ে লাখ বিন্দু", "Jupyter-এ সরাসরি ইন্টারঅ্যাকটিভ"],
+    limits=["বিশেষ কাস্টমাইজেশনে HoloViews/Bokeh জানতে হয়"],
+    alt="holoviews, plotly, bokeh",
+)
+
+pylib("datashader",
+    about=("Datashader লাখ-কোটি বিন্দুকেও নিখুঁত ছবিতে পরিণত করে: প্রতিটা পিক্সেলে কয়টা বিন্দু পড়েছে গুনে রং দেয়। "
+           "সাধারণ চার্টে বিন্দুগুলো একটার উপর আরেকটা পড়ে যা লুকায়, Datashader তা দেখায়।"),
+    install="pip install datashader pandas",
+    examples=[
+        ex("১০ লাখ বিন্দুর ঘনত্ব ছবি",
+           "১০ লাখ বিন্দু (পাঁচটা ভিন্ন দল) এক সেকেন্ডে পিক্সেলে গুনে রঙিন ছবি; eq_hist দিয়ে ঘন ও পাতলা দুই জায়গাই দৃশ্যমান।",
+           '''import numpy as np
+import pandas as pd
+import datashader as ds
+import datashader.transfer_functions as tf
+
+rng = np.random.default_rng(0)
+n = 200_000
+centers = [(0, 0, 0.6), (2.5, 1.5, 0.3), (-2, 2, 0.8), (1.5, -2.5, 0.4), (-1.5, -1.5, 0.2)]
+df = pd.concat([pd.DataFrame({"x": rng.normal(cx, s, n), "y": rng.normal(cy, s, n)})
+                for cx, cy, s in centers], ignore_index=True)
+
+canvas = ds.Canvas(plot_width=900, plot_height=600, x_range=(-5, 5), y_range=(-4.5, 4.5))
+agg = canvas.points(df, "x", "y")                    # প্রতিটা পিক্সেলে কয়টা বিন্দু
+img = tf.shade(agg, cmap=["#0b0820", "#7c3aed", "#f472b6", "#fde68a"], how="eq_hist")
+img = tf.set_background(img, "#0b0820")
+
+img.to_pil().save("million_points.png")
+print(f"{len(df):,} বিন্দু → million_points.png")'''),
+        ex("দল অনুযায়ী রং (count_cat)",
+           "প্রতিটা পিক্সেলে কোন দলের বিন্দু বেশি, সেই অনুযায়ী রং মেশানো – শহরের জনসংখ্যা মানচিত্রের মতো।",
+           '''import numpy as np
+import pandas as pd
+import datashader as ds
+import datashader.transfer_functions as tf
+
+rng = np.random.default_rng(1)
+parts = []
+for name, (cx, cy) in {"A": (-1.5, 0), "B": (1.5, 0.5), "C": (0, 2)}.items():
+    m = 300_000
+    parts.append(pd.DataFrame({"x": rng.normal(cx, 1.1, m), "y": rng.normal(cy, 1.1, m), "group": name}))
+df = pd.concat(parts, ignore_index=True)
+df["group"] = df["group"].astype("category")         # count_cat এর জন্য দরকার
+
+canvas = ds.Canvas(plot_width=900, plot_height=600)
+agg = canvas.points(df, "x", "y", agg=ds.count_cat("group"))
+img = tf.shade(agg, color_key={"A": "#22d3ee", "B": "#f472b6", "C": "#a3e635"}, how="eq_hist")
+tf.set_background(img, "black").to_pil().save("groups.png")
+print("groups.png সেভ হয়েছে ✔")'''),
+    ],
+    level="মাঝারি", tag="কোটি বিন্দুকেও সঠিকভাবে ছবিতে রূপ দেয়।",
+    tasks=["GPS ট্র্যাক, ট্যাক্সি ট্রিপের মতো বিশাল ডেটা", "ঘনত্বের মানচিত্র", "লাইন ও টাইম সিরিজের বিশাল সংগ্রহ"],
+    caps=["points, line, area, raster, trimesh", "count, mean, count_cat অ্যাগ্রিগেশন", "HoloViews/hvPlot-এ ইন্টারঅ্যাকটিভ জুম"],
+    limits=["অক্ষ, লেবেল নিজে দেয় না – হলোভিউজ বা matplotlib-এর সাথে জুড়তে হয়", "ইনস্টল ভারী (numba)"],
+    alt="holoviews, matplotlib",
+)
+
+pylib("plotnine",
+    about=("plotnine হলো R-এর বিখ্যাত ggplot2 পাইথনে: ggplot(df, aes(...)) + geom_point() + ... এভাবে স্তরে স্তরে চার্ট। "
+           "facet দিয়ে ছোট ছোট অনেক চার্ট, থিম দিয়ে পুরো চেহারা এক লাইনে বদলানো যায়।"),
+    install="pip install plotnine pandas",
+    examples=[
+        ex("রিগ্রেশন ও ফ্যাসেট",
+           "পড়ার ঘণ্টা বনাম নম্বর, বিভাগ অনুযায়ী তিনটা প্যানেল (facet_wrap), প্রতিটায় সরলরেখা আর আস্থার ছায়া।",
+           '''import numpy as np
+import pandas as pd
+from plotnine import (aes, facet_wrap, geom_point, geom_smooth, ggplot, labs,
+                      scale_color_manual, theme, theme_minimal)
+
+rng = np.random.default_rng(4)
+rows = []
+for dept, slope in [("CSE", 5), ("EEE", 4), ("BBA", 3)]:
+    hours = rng.uniform(0, 10, 80)
+    rows += [dict(dept=dept, hours=h, marks=min(100, 40 + slope * h + rng.normal(0, 7))) for h in hours]
+df = pd.DataFrame(rows)
+
+p = (ggplot(df, aes("hours", "marks", color="dept"))
+     + geom_point(alpha=0.6, size=2)
+     + geom_smooth(method="lm", se=True)
+     + facet_wrap("~dept")
+     + scale_color_manual(values=["#7c3aed", "#e11d48", "#0d9488"])
+     + labs(title="Study hours vs marks", x="Hours per day", y="Marks")
+     + theme_minimal()
+     + theme(figure_size=(10, 4), legend_position="none"))
+p.save("facets.png", dpi=150)'''),
+        ex("বক্স + জিটার + থিম",
+           "চার পদ্ধতিতে পরীক্ষার ফল: বক্স প্লটের উপর ছড়ানো বিন্দু (geom_jitter), নিজের রং আর থিম।",
+           '''import numpy as np
+import pandas as pd
+from plotnine import (aes, element_text, geom_boxplot, geom_jitter, ggplot, labs,
+                      scale_fill_manual, theme, theme_bw)
+
+rng = np.random.default_rng(5)
+methods = ["Lecture", "Video", "Group", "Practice"]
+df = pd.DataFrame({
+    "method": np.repeat(methods, 50),
+    "score": np.concatenate([rng.normal(m, 8, 50) for m in (64, 67, 72, 79)]),
+})
+df["method"] = pd.Categorical(df["method"], categories=methods)
+
+p = (ggplot(df, aes("method", "score", fill="method"))
+     + geom_boxplot(alpha=0.5, outlier_shape="")
+     + geom_jitter(width=0.15, size=1.6, alpha=0.6)
+     + scale_fill_manual(values=["#c4b5fd", "#a78bfa", "#8b5cf6", "#6d28d9"])
+     + labs(title="Which study method works best?", x="", y="Score")
+     + theme_bw()
+     + theme(figure_size=(8, 4.5), legend_position="none",
+             plot_title=element_text(weight="bold", size=14)))
+p.save("methods.png", dpi=150)'''),
+    ],
+    level="শুরু থেকে মাঝারি", tag="পাইথনে ggplot2: স্তরে স্তরে চার্ট, facet ও থিম।",
+    tasks=["প্রকাশনার মানের পরিসংখ্যান চার্ট", "facet দিয়ে দলভিত্তিক তুলনা", "R থেকে আসা মানুষের জন্য পরিচিত স্টাইল"],
+    caps=["geom_*, stat_*, scale_*, facet_*, theme_*", "ggsave-এর মতো .save()", "Matplotlib-এর উপর চলে"],
+    limits=["ইন্টারঅ্যাকটিভ নয়", "ggplot2-এর সব এক্সটেনশন নেই"],
+    alt="seaborn, lets-plot, altair",
+)
+
+pylib("lets-plot",
+    about=("Lets-Plot হলো JetBrains-এর বানানো ggplot-ধাঁচের লাইব্রেরি, কিন্তু আউটপুট ইন্টারঅ্যাকটিভ: হোভার করলে টুলটিপ, "
+           "জুম। HTML, SVG, PNG তিন ফরম্যাটে সেভ করা যায়।"),
+    install="pip install lets-plot pandas",
+    examples=[
+        ex("টুলটিপসহ স্ক্যাটার ও ঘনত্ব",
+           "দুই দলের উচ্চতা-ওজন; পেছনে 2D ঘনত্বের কনট্যুর, বিন্দুর উপর মাউস রাখলে কাস্টম টুলটিপ।",
+           '''import numpy as np
+import pandas as pd
+from lets_plot import (LetsPlot, aes, geom_density2d, geom_point, ggplot, ggsave,
+                       ggsize, labs, layer_tooltips, scale_color_manual, theme_minimal)
+
+LetsPlot.setup_html()
+rng = np.random.default_rng(6)
+a = rng.multivariate_normal([165, 60], [[40, 25], [25, 60]], 300)
+b = rng.multivariate_normal([175, 74], [[45, 30], [30, 80]], 300)
+df = pd.DataFrame(np.vstack([a, b]), columns=["height", "weight"])
+df["group"] = ["A"] * 300 + ["B"] * 300
+
+p = (ggplot(df, aes("height", "weight", color="group"))
+     + geom_density2d(size=0.8)
+     + geom_point(alpha=0.5, size=2.5,
+                  tooltips=layer_tooltips().line("group @group").line("@height cm, @weight kg"))
+     + scale_color_manual(values=["#7c3aed", "#e11d48"])
+     + labs(title="Height and weight", x="Height (cm)", y="Weight (kg)")
+     + theme_minimal() + ggsize(760, 480))
+ggsave(p, "height_weight.html")'''),
+        ex("স্তূপ করা বার চার্ট",
+           "বিভাগ অনুযায়ী ছাত্র-ছাত্রী সংখ্যা স্তূপ করে; প্রতিটা অংশে হোভার করলে সংখ্যা।",
+           '''import pandas as pd
+from lets_plot import LetsPlot, aes, geom_bar, ggplot, ggsave, ggsize, labs, scale_fill_manual
+
+LetsPlot.setup_html()
+df = pd.DataFrame({
+    "dept": ["CSE", "CSE", "EEE", "EEE", "BBA", "BBA", "ENG", "ENG"],
+    "gender": ["F", "M"] * 4,
+    "students": [120, 260, 80, 210, 190, 170, 150, 90],
+})
+
+p = (ggplot(df, aes(x="dept", y="students", fill="gender"))
+     + geom_bar(stat="identity", position="stack")
+     + scale_fill_manual(values=["#e11d48", "#0284c7"])
+     + labs(title="Students by department", x="", y="Students")
+     + ggsize(640, 400))
+ggsave(p, "students.html")'''),
+    ],
+    level="শুরু থেকে মাঝারি", tag="ggplot-ধাঁচ, কিন্তু ইন্টারঅ্যাকটিভ টুলটিপ ও জুমসহ।",
+    tasks=["নোটবুকে ইন্টারঅ্যাকটিভ পরিসংখ্যান চার্ট", "ম্যাপ (geom_livemap)", "HTML/SVG রিপোর্ট"],
+    caps=["ggplot ব্যাকরণ", "layer_tooltips দিয়ে কাস্টম টুলটিপ", "Kotlin-এও একই API"],
+    limits=["কমিউনিটি plotnine/seaborn-এর চেয়ে ছোট"],
+    alt="plotnine, plotly, altair",
+)
+
+pylib("pyecharts",
+    about=("pyecharts দিয়ে পাইথন থেকে Apache ECharts-এর চার্ট বানানো যায়: চেইন করে .add_xaxis().add_yaxis() লিখে "
+           ".render() করলেই HTML। ভেতরে ECharts চলে, তাই পাশের লাইভ চার্টটা ঠিক এমনই দেখাবে।"),
+    install="pip install pyecharts",
+    examples=[
+        ex("জুমসহ বার চার্ট",
+           "মাসিক বৃষ্টি, গড়ের রেখা, নিচে জুম স্লাইডার, টুলবক্সে ছবি সেভ। ডানে একই চার্ট ECharts দিয়ে লাইভ।",
+           '''from pyecharts import options as opts
+from pyecharts.charts import Bar
+
+months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+rain = [7, 28, 65, 150, 280, 330, 380, 310, 300, 170, 30, 10]
+
+bar = (
+    Bar()
+    .add_xaxis(months)
+    .add_yaxis("Rain (mm)", rain, color="#7c3aed",
+               markline_opts=opts.MarkLineOpts(data=[opts.MarkLineItem(type_="average", name="Average")]))
+    .set_global_opts(
+        title_opts=opts.TitleOpts(title="Monthly rainfall", pos_left="center"),
+        tooltip_opts=opts.TooltipOpts(trigger="axis"),
+        toolbox_opts=opts.ToolboxOpts(),
+        datazoom_opts=[opts.DataZoomOpts(), opts.DataZoomOpts(type_="inside")],
+        legend_opts=opts.LegendOpts(is_show=False),
+    )
+)
+bar.render("rainfall.html")''',
+           hint="লাইভ: নিচের স্লাইডার টানো",
+           live=live("echarts", '''const chart = echarts.init(document.getElementById("app"));
+chart.setOption({
+  title: { text: "Monthly rainfall", left: "center" },
+  tooltip: { trigger: "axis" },
+  toolbox: { feature: { saveAsImage: {}, dataZoom: {}, restore: {} } },
+  xAxis: { type: "category", data: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"] },
+  yAxis: { type: "value" },
+  dataZoom: [{ type: "slider" }, { type: "inside" }],
+  series: [{ name: "Rain (mm)", type: "bar", data: [7,28,65,150,280,330,380,310,300,170,30,10],
+             itemStyle: { color: "#7c3aed" },
+             markLine: { data: [{ type: "average", name: "Average" }] } }]
+});
+window.addEventListener("resize", () => chart.resize());''')),
+        ex("রোজ পাই ও লেজেন্ড",
+           "বিভাগ অনুযায়ী দর্শনার্থী, নাইটিঙ্গেল রোজ আকারে। ডানে লাইভ।",
+           '''from pyecharts import options as opts
+from pyecharts.charts import Pie
+
+data = [("Dhaka", 40), ("Chattogram", 32), ("Sylhet", 25), ("Khulna", 20),
+        ("Rajshahi", 16), ("Barishal", 12), ("Rangpur", 9), ("Mymensingh", 7)]
+
+pie = (
+    Pie()
+    .add("", data, radius=["20%", "70%"], center=["50%", "48%"], rosetype="area",
+         itemstyle_opts=opts.ItemStyleOpts(border_radius=6))
+    .set_global_opts(title_opts=opts.TitleOpts(title="Visitors by division", pos_left="center"),
+                     legend_opts=opts.LegendOpts(pos_bottom="0%"))
+    .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {c}"))
+)
+pie.render("visitors.html")''',
+           hint="লাইভ: লেজেন্ডে চাপো",
+           live=live("echarts", '''const chart = echarts.init(document.getElementById("app"));
+chart.setOption({
+  title: { text: "Visitors by division", left: "center" },
+  tooltip: { trigger: "item" },
+  legend: { bottom: 0 },
+  series: [{ type: "pie", roseType: "area", radius: ["20%", "70%"], center: ["50%", "48%"],
+    itemStyle: { borderRadius: 6 }, label: { formatter: "{b}: {c}" },
+    data: [{ name: "Dhaka", value: 40 }, { name: "Chattogram", value: 32 }, { name: "Sylhet", value: 25 },
+           { name: "Khulna", value: 20 }, { name: "Rajshahi", value: 16 }, { name: "Barishal", value: 12 },
+           { name: "Rangpur", value: 9 }, { name: "Mymensingh", value: 7 }] }]
+});
+window.addEventListener("resize", () => chart.resize());''')),
+    ],
+    level="শুরু", tag="পাইথন থেকে ECharts: চেইন করা API, আউটপুট ইন্টারঅ্যাকটিভ HTML।",
+    tasks=["ইন্টারঅ্যাকটিভ HTML রিপোর্ট", "ম্যাপ, Sankey, গেজ, ক্যালেন্ডার", "Flask/Django পেজে চার্ট"],
+    caps=["ECharts-এর প্রায় সব চার্ট", "Page দিয়ে এক পাতায় অনেক চার্ট", "make_snapshot দিয়ে PNG (আলাদা টুল লাগে)"],
+    limits=["ডকুমেন্টেশনের বড় অংশ চীনা ভাষায়", "PNG সেভে snapshot-selenium লাগে"],
+    alt="Apache ECharts, plotly, bokeh",
+)
+
+pylib("pygal",
+    about=("Pygal দিয়ে খুব সহজে সুন্দর SVG চার্ট বানানো যায়: অল্প কোড, নিজে থেকেই হোভার করলে মান দেখায়, "
+           "অনেকগুলো তৈরি স্টাইল। SVG বলে যেকোনো মাপে ঝকঝকে।"),
+    install="pip install pygal",
+    examples=[
+        ex("স্টাইলসহ বার চার্ট",
+           "দুই শহরের মাসিক বৃষ্টি পাশাপাশি বার; তৈরি স্টাইল বদলে পুরো চেহারা বদলানো যায়।",
+           '''import pygal
+from pygal.style import Style
+
+style = Style(background="white", plot_background="white", colors=("#7c3aed", "#0d9488"),
+              font_family="sans-serif", title_font_size=22)
+
+chart = pygal.Bar(style=style, title="Monthly rainfall (mm)", x_label_rotation=0,
+                  legend_at_bottom=True, width=900, height=450)
+chart.x_labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+chart.add("Dhaka", [7, 28, 65, 150, 280, 330, 380, 310, 300, 170, 30, 10])
+chart.add("Sylhet", [10, 40, 150, 380, 520, 820, 790, 640, 500, 230, 30, 8])
+chart.render_to_file("rainfall.svg")       # ব্রাউজারে খোলো, হোভার করো'''),
+        ex("রাডার ও ডোনাট",
+           "দুই শিক্ষার্থীর দক্ষতা রাডারে, আর মাসিক খরচ ডোনাটে – দুটো আলাদা SVG।",
+           '''import pygal
+from pygal.style import LightColorizedStyle
+
+radar = pygal.Radar(fill=True, style=LightColorizedStyle, title="Skills")
+radar.x_labels = ["Python", "Math", "English", "Design", "Teamwork", "Writing"]
+radar.add("Rahim", [85, 70, 60, 45, 80, 55])
+radar.add("Sumi", [65, 90, 80, 75, 60, 85])
+radar.render_to_file("skills.svg")
+
+donut = pygal.Pie(inner_radius=0.55, title="Monthly budget (Tk)", style=LightColorizedStyle)
+for name, amount in [("Rent", 12000), ("Food", 8000), ("Transport", 2500),
+                     ("Study", 3000), ("Internet", 1000), ("Other", 1500)]:
+    donut.add(name, amount)
+donut.render_to_file("budget.svg")'''),
+    ],
+    level="শুরু", tag="অল্প কোডে সুন্দর, হোভারওয়ালা SVG চার্ট।",
+    tasks=["ওয়েবপেজে হালকা SVG চার্ট", "রিপোর্টে ঝকঝকে ভেক্টর চার্ট", "Flask থেকে সরাসরি SVG পাঠানো"],
+    caps=["Bar, Line, Pie, Radar, Gauge, Funnel, World map", "১৪+ তৈরি স্টাইল", "render_to_png (cairosvg দিয়ে)"],
+    limits=["খুব বড় ডেটায় SVG ভারী হয়", "জটিল লেআউট বা 3D নেই"],
+    alt="matplotlib, plotly, Chart.js",
+)
+
+pylib("missingno",
+    about=("missingno দিয়ে এক নজরে দেখা যায় ডেটাসেটে কোথায় কোথায় মান নেই (missing/NaN): ম্যাট্রিক্স, বার, আর কোন "
+           "কলামগুলো একসাথে খালি থাকে তার হিটম্যাপ। ডেটা পরিষ্কার করার আগে প্রথম কাজ।"),
+    install="pip install missingno pandas matplotlib",
+    examples=[
+        ex("মিসিং ম্যাট্রিক্স",
+           "জরিপের ৩০০ সারি; সাদা দাগ = মান নেই। ডানে প্রতিটা সারির সম্পূর্ণতার রেখা।",
+           '''import numpy as np
+import pandas as pd
+import missingno as msno
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(7)
+n = 300
+df = pd.DataFrame({
+    "age": rng.integers(18, 70, n).astype(float),
+    "income": rng.normal(30000, 9000, n),
+    "district": rng.choice(["Dhaka", "Sylhet", "Khulna"], n),
+    "phone": rng.integers(1, 9, n).astype(float),
+    "email": rng.integers(1, 9, n).astype(float),
+    "rating": rng.integers(1, 6, n).astype(float),
+})
+df.loc[rng.random(n) < 0.15, "income"] = np.nan
+mask = rng.random(n) < 0.25
+df.loc[mask, ["phone", "email"]] = np.nan          # ফোন না দিলে ইমেইলও দেয়নি
+df.loc[150:190, "rating"] = np.nan                  # একটা সময় রেটিং নেওয়া হয়নি
+
+msno.matrix(df, color=(0.49, 0.23, 0.93), figsize=(10, 5), fontsize=11)
+plt.title("Where is data missing?", fontsize=16, fontweight="bold")
+plt.savefig("missing_matrix.png", dpi=150, bbox_inches="tight")'''),
+        ex("বার ও হিটম্যাপ",
+           "প্রতিটা কলামে কত শতাংশ মান আছে (বার), আর কোন কলাম একসাথে খালি থাকে (হিটম্যাপ, ১ মানে সবসময় একসাথে)।",
+           '''import numpy as np
+import pandas as pd
+import missingno as msno
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(8)
+n = 500
+df = pd.DataFrame(rng.normal(size=(n, 6)), columns=["temp", "humidity", "rain", "wind", "pressure", "uv"])
+df.loc[rng.random(n) < 0.2, ["humidity", "rain"]] = np.nan    # একই সেন্সর
+df.loc[rng.random(n) < 0.1, "uv"] = np.nan
+df.loc[rng.random(n) < 0.05, "wind"] = np.nan
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+msno.bar(df, ax=axes[0], color="#7c3aed", fontsize=10)
+axes[0].set_title("Completeness per column", fontweight="bold")
+msno.heatmap(df, ax=axes[1], cmap="PuOr", fontsize=10)
+axes[1].set_title("Which columns go missing together", fontweight="bold")
+plt.tight_layout()
+plt.savefig("missing_summary.png", dpi=150)'''),
+    ],
+    level="শুরু", tag="ডেটায় কোথায় মান নেই, এক নজরে।",
+    tasks=["ডেটা পরিষ্কারের আগে পরীক্ষা", "সেন্সর বা জরিপের ফাঁক খোঁজা", "কোন কলাম একসাথে খালি থাকে বোঝা"],
+    caps=["matrix, bar, heatmap, dendrogram", "pandas DataFrame সরাসরি", "matplotlib-এ আঁকে, তাই সেভ সহজ"],
+    limits=["শুধু মিসিং ডেটা দেখায়, ঠিক করে না", "খুব বেশি কলামে ছবি ঘন হয়ে যায়"],
+    alt="pandas, seaborn",
+)
