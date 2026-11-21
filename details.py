@@ -22,9 +22,46 @@ def lib(about, install, example, project_title, project_about, project_code):
                 project_code=project_code)
 
 
-def ex(title, about, code, hint=None):
-    """একটা অতিরিক্ত উদাহরণ-কার্ড। hint = কার্ডের নিচে ছোট টিপ।"""
-    return dict(title=title, about=about, code=code, hint=hint)
+def ex(title, about, code, hint=None, live=None, lang="python"):
+    """একটা উদাহরণ-কার্ড।
+    hint = কার্ডের নিচে ছোট টিপ
+    live = ব্রাউজারে লাইভ চালানোর জন্য dict(cdn=[...], css=[...], js="...")
+    lang = "python" বা "js"
+    """
+    return dict(title=title, about=about, code=code, hint=hint, live=live, lang=lang)
+
+
+# ব্রাউজারে লাইভ ডেমোর জন্য CDN ঠিকানা
+CDN = {
+    "chartjs": ["https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"],
+    "echarts": ["https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"],
+    "plotly": ["https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"],
+    "d3": ["https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"],
+    "apex": ["https://cdn.jsdelivr.net/npm/apexcharts@3.49.0/dist/apexcharts.min.js"],
+    "vega": ["https://cdn.jsdelivr.net/npm/vega@5.30.0/build/vega.min.js",
+             "https://cdn.jsdelivr.net/npm/vega-lite@5.21.0/build/vega-lite.min.js",
+             "https://cdn.jsdelivr.net/npm/vega-embed@6.26.0/build/vega-embed.min.js"],
+    "plot": ["https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js",
+             "https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.16/dist/plot.umd.min.js"],
+    "uplot": ["https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.iife.min.js"],
+}
+CDN_CSS = {"uplot": ["https://cdn.jsdelivr.net/npm/uplot@1.6.30/dist/uPlot.min.css"]}
+
+
+def live(kind, js):
+    return dict(cdn=CDN[kind], css=CDN_CSS.get(kind, []), js=js)
+
+
+def jsex(kind, title, about, code, hint=None):
+    """JavaScript লাইব্রেরির উদাহরণ: কোডটাই ব্রাউজারে লাইভ চলে (#app ডিভের ভেতরে)।"""
+    return ex(title, about, code, hint=hint, live=live(kind, code), lang="js")
+
+
+def jslib(name, about, install, examples, **manual):
+    """JavaScript লাইব্রেরি: উদাহরণগুলো সরাসরি তালিকা হিসেবে।"""
+    DETAILS[name] = dict(about=about, install=install, examples=list(examples), lang="js")
+    if manual:
+        man(name, **manual)
 
 
 def more(name, *examples):
@@ -40,6 +77,8 @@ def man(name, tasks=None, caps=None, limits=None, alt="", level="", tag=""):
 
 def examples_of(d):
     """একটা লাইব্রেরির সব উদাহরণ ক্রমানুসারে: সহজ উদাহরণ, প্রজেক্ট, তারপর বাকিগুলো।"""
+    if "examples" in d:
+        return d["examples"] + d.get("more", [])
     out = [ex("সহজ উদাহরণ", "শুরু করার জন্য সবচেয়ে ছোট কোড।", d["example"]),
            ex(d["project_title"], d["project_about"], d["project_code"], hint="প্রজেক্ট")]
     return out + d.get("more", [])
@@ -4183,4 +4222,1306 @@ man("seaborn",
     limits=["ইন্টারঅ্যাকটিভ নয় (জুম/হোভার নেই)", "খুব বিশেষ ধরনের চার্টে Matplotlib-এ নামতে হয়",
             "load_dataset() নমুনা ডেটা আনতে ইন্টারনেট লাগে"],
     alt="matplotlib, plotly, plotnine, altair",
+)
+
+
+# ==================================================================
+# JavaScript চার্ট লাইব্রেরি – সাইটের ভেতরেই লাইভ চলে
+# ==================================================================
+
+jslib("Chart.js",
+    about=("Chart.js হলো সবচেয়ে জনপ্রিয় সহজ JavaScript চার্ট লাইব্রেরি। Canvas-এ বার, লাইন, পাই, "
+           "রাডার চার্ট আঁকে, মোবাইলে নিজে থেকে মাপ বদলায়, হোভার করলে মান দেখায়।"),
+    install='npm install chart.js\n<!-- অথবা HTML-এ: <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> -->',
+    examples=[
+        jsex("chartjs", "বৃষ্টি (বার) + তাপমাত্রা (লাইন)",
+             "একই চার্টে দুই ধরনের ডেটা, দুই পাশে দুটো আলাদা অক্ষ।",
+             '''const box = document.getElementById("app");
+const canvas = document.createElement("canvas");
+box.append(canvas);
+
+new Chart(canvas, {
+  type: "bar",
+  data: {
+    labels: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+    datasets: [
+      { label: "Rain (mm)", data: [7,28,65,150,280,330,380,310,300,170,30,10],
+        backgroundColor: "rgba(124,58,237,.55)", borderRadius: 6, yAxisID: "y" },
+      { type: "line", label: "Temp (°C)", data: [19,22,27,30,31,30,29,29,29,28,24,20],
+        borderColor: "#e11d48", backgroundColor: "#e11d48", tension: 0.35, yAxisID: "y1" }
+    ]
+  },
+  options: {
+    maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: { title: { display: true, text: "Dhaka – rain and temperature" } },
+    scales: {
+      y:  { title: { display: true, text: "mm" } },
+      y1: { position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "°C" } }
+    }
+  }
+});''', hint="মাউস রাখো মান দেখতে, লেজেন্ডে চাপলে ডেটা লুকায়"),
+        jsex("chartjs", "ডোনাট চার্ট",
+             "মাসিক খরচের ভাগ; লেজেন্ডে চাপলে অংশ সরে যায় আর বাকিগুলো নতুন করে ভাগ হয়।",
+             '''const canvas = document.createElement("canvas");
+document.getElementById("app").append(canvas);
+
+new Chart(canvas, {
+  type: "doughnut",
+  data: {
+    labels: ["Rent", "Food", "Transport", "Study", "Internet", "Other"],
+    datasets: [{
+      data: [12000, 8000, 2500, 3000, 1000, 1500],
+      backgroundColor: ["#7c3aed","#0284c7","#0d9488","#d97706","#e11d48","#94a3b8"],
+      borderWidth: 3, hoverOffset: 14
+    }]
+  },
+  options: {
+    maintainAspectRatio: false,
+    cutout: "62%",
+    plugins: {
+      legend: { position: "right" },
+      title: { display: true, text: "Monthly budget (Tk)" }
+    }
+  }
+});''', hint="লেজেন্ডের নামে চাপ দাও"),
+        jsex("chartjs", "রাডার চার্ট",
+             "দুই শিক্ষার্থীর ছয়টা দক্ষতা একসাথে তুলনা।",
+             '''const canvas = document.createElement("canvas");
+document.getElementById("app").append(canvas);
+
+new Chart(canvas, {
+  type: "radar",
+  data: {
+    labels: ["Python", "Math", "English", "Design", "Teamwork", "Writing"],
+    datasets: [
+      { label: "Rahim", data: [85, 70, 60, 45, 80, 55],
+        borderColor: "#7c3aed", backgroundColor: "rgba(124,58,237,.2)" },
+      { label: "Sumi", data: [65, 90, 80, 75, 60, 85],
+        borderColor: "#0d9488", backgroundColor: "rgba(13,148,136,.2)" }
+    ]
+  },
+  options: {
+    maintainAspectRatio: false,
+    scales: { r: { suggestedMin: 0, suggestedMax: 100 } }
+  }
+});'''),
+    ],
+    level="শুরু", tag="সহজ, সুন্দর Canvas চার্ট; কয়েক লাইনে বার, লাইন, পাই, রাডার।",
+    tasks=["ওয়েবসাইট বা ড্যাশবোর্ডে ছোট-মাঝারি চার্ট", "বার + লাইন মেশানো চার্ট", "পাই, ডোনাট, রাডার, বাবল চার্ট",
+           "রিয়েল-টাইমে ডেটা আপডেট (chart.update())"],
+    caps=["৮ ধরনের মূল চার্ট, মেশানো যায়", "নিজে থেকে responsive আর animated", "plugin দিয়ে বাড়ানো যায় (zoom, annotation)"],
+    limits=["হাজার হাজার বিন্দুতে ধীর; বড় ডেটায় uPlot বা ECharts ভালো", "ম্যাপ বা 3D নেই"],
+    alt="Apache ECharts, ApexCharts, Plotly.js",
+)
+
+jslib("Apache ECharts",
+    about=("Apache ECharts হলো খুব শক্তিশালী চার্ট লাইব্রেরি: সাধারণ চার্ট থেকে ক্যালেন্ডার হিটম্যাপ, "
+           "Sankey, ম্যাপ, গেজ সব। বড় ডেটা দ্রুত আঁকে, জুম, টুলবক্স আর ছবি সেভ করার বাটন আগে থেকেই আছে।"),
+    install='npm install echarts\n<!-- অথবা: <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script> -->',
+    examples=[
+        jsex("echarts", "জুম করা যায় এমন বার চার্ট",
+             "৬০ দিনের বিক্রি; নিচের স্লাইডার দিয়ে সময়ের পরিসর বদলাও, টুলবক্সে ছবি সেভ।",
+             '''const chart = echarts.init(document.getElementById("app"));
+let seed = 3;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+const days = [], sales = [];
+for (let i = 1; i <= 60; i++) {
+  days.push("Day " + i);
+  sales.push(Math.round(200 + i * 4 + rand() * 120));
+}
+
+chart.setOption({
+  title: { text: "Daily sales", left: "center" },
+  tooltip: { trigger: "axis" },
+  toolbox: { feature: { dataZoom: {}, restore: {}, saveAsImage: {} } },
+  xAxis: { type: "category", data: days },
+  yAxis: { type: "value" },
+  dataZoom: [{ type: "inside", start: 0, end: 50 }, { type: "slider", start: 0, end: 50 }],
+  series: [{
+    type: "bar", data: sales, itemStyle: { color: "#7c3aed", borderRadius: [4, 4, 0, 0] },
+    markLine: { data: [{ type: "average", name: "Average" }] }
+  }]
+});
+window.addEventListener("resize", () => chart.resize());''', hint="নিচের স্লাইডার টানো, চাকা ঘুরিয়ে জুম করো"),
+        jsex("echarts", "ক্যালেন্ডার হিটম্যাপ",
+             "সারা বছর প্রতিদিন কত ঘণ্টা পড়া হয়েছে – GitHub-এর contribution গ্রাফের মতো।",
+             '''const chart = echarts.init(document.getElementById("app"));
+let seed = 11;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+const data = [];
+const start = Date.UTC(2026, 0, 1);
+for (let i = 0; i < 365; i++) {
+  const day = new Date(start + i * 86400000).toISOString().slice(0, 10);
+  const weekend = [5, 6].includes(new Date(start + i * 86400000).getUTCDay());
+  data.push([day, Math.round(rand() * (weekend ? 3 : 8))]);
+}
+
+chart.setOption({
+  title: { text: "Study hours in 2026", left: "center" },
+  tooltip: { formatter: p => p.value[0] + ": " + p.value[1] + " h" },
+  visualMap: { min: 0, max: 8, orient: "horizontal", left: "center", bottom: 10,
+               inRange: { color: ["#f3e8ff", "#7c3aed", "#2e1065"] } },
+  calendar: { range: "2026", top: 60, left: 40, right: 20, cellSize: ["auto", 16] },
+  series: [{ type: "heatmap", coordinateSystem: "calendar", data }]
+});
+window.addEventListener("resize", () => chart.resize());'''),
+        jsex("echarts", "নাইটিঙ্গেল রোজ চার্ট",
+             "পাইয়ের মতো, কিন্তু প্রতিটা ভাগের ব্যাসার্ধ মানের সমান – বড় পার্থক্য সহজে চোখে পড়ে।",
+             '''const chart = echarts.init(document.getElementById("app"));
+
+chart.setOption({
+  title: { text: "Visitors by division", left: "center" },
+  tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
+  legend: { bottom: 0 },
+  series: [{
+    type: "pie", roseType: "area", radius: [20, "70%"], center: ["50%", "48%"],
+    itemStyle: { borderRadius: 6 },
+    data: [
+      { value: 40, name: "Dhaka" }, { value: 32, name: "Chattogram" },
+      { value: 25, name: "Sylhet" }, { value: 20, name: "Khulna" },
+      { value: 16, name: "Rajshahi" }, { value: 12, name: "Barishal" },
+      { value: 9, name: "Rangpur" }, { value: 7, name: "Mymensingh" }
+    ]
+  }]
+});
+window.addEventListener("resize", () => chart.resize());'''),
+    ],
+    level="মাঝারি", tag="বড় ও সমৃদ্ধ চার্ট লাইব্রেরি: ক্যালেন্ডার, Sankey, ম্যাপ, গেজ, জুম, টুলবক্স।",
+    tasks=["ইন্টারঅ্যাকটিভ ড্যাশবোর্ড", "ক্যালেন্ডার হিটম্যাপ, Sankey, গেজ, ট্রি-ম্যাপ", "লাখ বিন্দুর স্ক্যাটার (WebGL এক্সটেনশন)",
+           "জুম, ছবি সেভ, ডেটা ভিউ টুলবক্স"],
+    caps=["৪০+ ধরনের চার্ট", "dataZoom, visualMap, brush দিয়ে ইন্টারঅ্যাকশন", "Canvas বা SVG দুইভাবেই আঁকে", "pyecharts দিয়ে পাইথন থেকেও ব্যবহার"],
+    limits=["ফাইলের আকার বড় (~১ MB); শুধু দরকারি অংশ বেছে বিল্ড করা যায়", "অপশন অনেক, শিখতে সময় লাগে"],
+    alt="Chart.js, Plotly.js, ApexCharts",
+)
+
+jslib("Plotly.js",
+    about=("Plotly.js দিয়ে ব্রাউজারে বৈজ্ঞানিক মানের ইন্টারঅ্যাকটিভ চার্ট: 3D সারফেস, কনট্যুর, ম্যাপ, "
+           "সানবার্স্ট। জুম, ঘোরানো, হোভার, ছবি ডাউনলোড সব নিজে থেকেই আছে। Python-এর Plotly এটাই ব্যবহার করে।"),
+    install='npm install plotly.js-dist-min\n<!-- অথবা: <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script> -->',
+    examples=[
+        jsex("plotly", "ঘোরানো যায় এমন 3D সারফেস",
+             "sin(r)/r ঢেউ; মাউস দিয়ে টেনে ঘোরাও, স্ক্রল করে জুম।",
+             '''const n = 60, xs = [], z = [];
+for (let i = 0; i < n; i++) xs.push(-8 + (16 * i) / (n - 1));
+for (const y of xs) {
+  z.push(xs.map(x => {
+    const r = Math.hypot(x, y) + 1e-9;
+    return Math.sin(r) / r;
+  }));
+}
+
+Plotly.newPlot("app", [{
+  type: "surface", x: xs, y: xs, z, colorscale: "Viridis",
+  contours: { z: { show: true, usecolormap: true, project: { z: true } } }
+}], {
+  title: "sin(r) / r",
+  margin: { l: 0, r: 0, t: 40, b: 0 },
+  scene: { camera: { eye: { x: 1.6, y: 1.6, z: 0.9 } } }
+}, { responsive: true });''', hint="টেনে ঘোরাও"),
+        jsex("plotly", "রেঞ্জ স্লাইডারসহ টাইম সিরিজ",
+             "দুই বছরের দৈনিক তাপমাত্রা; নিচের ছোট চার্টে টেনে যেকোনো সময়ে জুম করা যায়।",
+             '''const dates = [], dhaka = [], sylhet = [];
+const start = Date.UTC(2025, 0, 1);
+for (let i = 0; i < 730; i++) {
+  dates.push(new Date(start + i * 86400000).toISOString().slice(0, 10));
+  const season = Math.sin(((i % 365) / 365) * 2 * Math.PI - 1.4);
+  dhaka.push(+(27 + 6 * season + Math.sin(i * 1.7) * 1.5).toFixed(1));
+  sylhet.push(+(25 + 5 * season + Math.cos(i * 1.3) * 1.5).toFixed(1));
+}
+
+Plotly.newPlot("app", [
+  { x: dates, y: dhaka, name: "Dhaka", line: { color: "#7c3aed" } },
+  { x: dates, y: sylhet, name: "Sylhet", line: { color: "#0d9488" } }
+], {
+  title: "Daily temperature (°C)",
+  hovermode: "x unified",
+  margin: { t: 40, r: 10 },
+  xaxis: { rangeslider: { visible: true },
+           rangeselector: { buttons: [
+             { count: 1, label: "1m", step: "month", stepmode: "backward" },
+             { count: 6, label: "6m", step: "month", stepmode: "backward" },
+             { step: "all", label: "all" } ] } }
+}, { responsive: true });''', hint="উপরের 1m / 6m বাটনে চাপো"),
+        jsex("plotly", "সানবার্স্ট",
+             "খরচের খাত → উপখাত, স্তরে স্তরে; কোনো অংশে চাপলে সেটা বড় হয়ে খোলে।",
+             '''Plotly.newPlot("app", [{
+  type: "sunburst",
+  labels:  ["Total", "Home", "Food", "Travel", "Rent", "Bills", "Market", "Restaurant", "Bus", "Rickshaw"],
+  parents: ["", "Total", "Total", "Total", "Home", "Home", "Food", "Food", "Travel", "Travel"],
+  values:  [0, 0, 0, 0, 12000, 2500, 6000, 2000, 1500, 1000],
+  branchvalues: "remainder",
+  marker: { colors: ["#fff", "#7c3aed", "#0d9488", "#d97706"] }
+}], {
+  title: "Where the money goes",
+  margin: { t: 40, l: 0, r: 0, b: 0 }
+}, { responsive: true });''', hint="কোনো অংশে চাপো"),
+    ],
+    level="মাঝারি", tag="ব্রাউজারে 3D, বৈজ্ঞানিক আর ইন্টারঅ্যাকটিভ চার্ট।",
+    tasks=["3D সারফেস ও স্ক্যাটার", "রেঞ্জ স্লাইডারসহ টাইম সিরিজ", "সানবার্স্ট, ট্রিম্যাপ, ফানেল", "কনট্যুর ও হিটম্যাপ", "ম্যাপে ডেটা"],
+    caps=["৪০+ চার্ট টাইপ, 3D সহ", "জুম, প্যান, হোভার, PNG ডাউনলোড আগে থেকে", "Python/R-এর Plotly একই JSON ব্যবহার করে"],
+    limits=["পূর্ণ বিল্ড বড় (~৩.৫ MB); 'basic' বিল্ড ছোট", "খুব বেশি ডেটায় WebGL টাইপ (scattergl) দরকার"],
+    alt="Apache ECharts, D3.js, Vega-Lite",
+)
+
+jslib("D3.js",
+    about=("D3.js দিয়ে ডেটাকে সরাসরি SVG বা Canvas-এর আকৃতির সাথে জুড়ে দেওয়া যায়। তৈরি চার্ট নেই, কিন্তু "
+           "স্কেল, অক্ষ, অ্যানিমেশন, ফোর্স লেআউট সব টুকরো আছে, তাই যেকোনো নতুন ধরনের ভিজুয়ালাইজেশন বানানো যায়।"),
+    install='npm install d3\n<!-- অথবা: <script src="https://cdn.jsdelivr.net/npm/d3@7"></script> -->',
+    examples=[
+        jsex("d3", "অ্যানিমেটেড সাজানো বার চার্ট",
+             "বাটনে চাপলে বারগুলো অ্যানিমেশন করে নতুন ক্রমে সাজে; ডেটা binding ও transition-এর ক্লাসিক উদাহরণ।",
+             '''const data = [
+  { name: "Dhaka", v: 23 }, { name: "Chattogram", v: 9 }, { name: "Khulna", v: 5 },
+  { name: "Rajshahi", v: 4 }, { name: "Sylhet", v: 4 }, { name: "Rangpur", v: 3 },
+  { name: "Barishal", v: 2 }, { name: "Mymensingh", v: 2.5 }
+];
+const app = d3.select("#app");
+const btn = app.append("button").text("Sort ↓")
+  .style("position", "absolute").style("right", "12px").style("top", "10px");
+const W = 640, H = 380, m = { t: 40, r: 20, b: 40, l: 50 };
+const svg = app.append("svg").attr("viewBox", [0, 0, W, H]).style("width", "100%").style("height", "100%");
+
+const x = d3.scaleBand().domain(data.map(d => d.name)).range([m.l, W - m.r]).padding(0.2);
+const y = d3.scaleLinear().domain([0, 25]).nice().range([H - m.b, m.t]);
+const color = d3.scaleSequential(d3.interpolatePurples).domain([-5, 25]);
+
+const xAxis = svg.append("g").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x));
+svg.append("g").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y));
+svg.append("text").attr("x", m.l).attr("y", 24).attr("font-weight", 700).text("Population (millions)");
+
+const bars = svg.selectAll("rect").data(data, d => d.name).join("rect")
+  .attr("x", d => x(d.name)).attr("width", x.bandwidth()).attr("rx", 4)
+  .attr("y", H - m.b).attr("height", 0).attr("fill", d => color(d.v));
+bars.transition().duration(900).delay((d, i) => i * 80)
+  .attr("y", d => y(d.v)).attr("height", d => y(0) - y(d.v));
+
+let sorted = false;
+btn.on("click", () => {
+  sorted = !sorted;
+  btn.text(sorted ? "Original" : "Sort ↓");
+  const order = sorted ? [...data].sort((a, b) => b.v - a.v) : data;
+  x.domain(order.map(d => d.name));
+  const t = svg.transition().duration(750);
+  bars.transition(t).delay((d, i) => i * 40).attr("x", d => x(d.name));
+  xAxis.transition(t).call(d3.axisBottom(x));
+});''', hint="Sort বাটনে চাপো"),
+        jsex("d3", "ফোর্স-ডিরেক্টেড নেটওয়ার্ক",
+             "বন্ধুত্বের নেটওয়ার্ক; বিন্দুগুলো নিজে থেকে জায়গা খুঁজে নেয়, মাউস দিয়ে টেনে সরানো যায়।",
+             '''const nodes = ["Rahim","Karim","Sumi","Riya","Tanvir","Nila","Arif","Mitu","Sakib","Joya","Rafi","Tania"]
+  .map((id, i) => ({ id, group: i % 3 }));
+const pairs = [[0,1],[0,2],[1,2],[2,3],[3,4],[4,5],[5,3],[6,7],[7,8],[8,6],[6,0],[9,10],[10,11],[11,9],[9,4],[1,7]];
+const links = pairs.map(([a, b]) => ({ source: nodes[a].id, target: nodes[b].id }));
+
+const W = 640, H = 400;
+const svg = d3.select("#app").append("svg").attr("viewBox", [0, 0, W, H])
+  .style("width", "100%").style("height", "100%");
+const color = d3.scaleOrdinal(["#7c3aed", "#0d9488", "#e11d48"]);
+
+const sim = d3.forceSimulation(nodes)
+  .force("link", d3.forceLink(links).id(d => d.id).distance(70))
+  .force("charge", d3.forceManyBody().strength(-220))
+  .force("center", d3.forceCenter(W / 2, H / 2));
+
+const link = svg.append("g").attr("stroke", "#c4b5fd").attr("stroke-width", 2)
+  .selectAll("line").data(links).join("line");
+const node = svg.append("g").selectAll("g").data(nodes).join("g").style("cursor", "grab")
+  .call(d3.drag()
+    .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+    .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+    .on("end", (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+node.append("circle").attr("r", 13).attr("fill", d => color(d.group)).attr("stroke", "#fff").attr("stroke-width", 2);
+node.append("text").text(d => d.id).attr("x", 16).attr("y", 4).attr("font-size", 12);
+
+sim.on("tick", () => {
+  link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+  node.attr("transform", d => `translate(${d.x},${d.y})`);
+});''', hint="যেকোনো বিন্দু টেনে সরাও"),
+        jsex("d3", "ক্রসহেয়ার টুলটিপসহ লাইন চার্ট",
+             "মাউস যেখানে, সেই দিনের মান একটা উল্লম্ব দাগ আর বিন্দু দিয়ে দেখায়।",
+             '''const W = 640, H = 380, m = { t: 30, r: 20, b: 35, l: 45 };
+const data = d3.range(90).map(i => ({
+  day: i + 1,
+  aqi: Math.round(150 + 60 * Math.sin(i / 9) + 25 * Math.sin(i / 2.3))
+}));
+
+const svg = d3.select("#app").append("svg").attr("viewBox", [0, 0, W, H])
+  .style("width", "100%").style("height", "100%");
+const x = d3.scaleLinear().domain([1, 90]).range([m.l, W - m.r]);
+const y = d3.scaleLinear().domain([0, d3.max(data, d => d.aqi)]).nice().range([H - m.b, m.t]);
+
+svg.append("g").attr("transform", `translate(0,${H - m.b})`).call(d3.axisBottom(x));
+svg.append("g").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y));
+svg.append("path").datum(data).attr("fill", "rgba(124,58,237,.12)")
+  .attr("d", d3.area().x(d => x(d.day)).y0(y(0)).y1(d => y(d.aqi)).curve(d3.curveMonotoneX));
+svg.append("path").datum(data).attr("fill", "none").attr("stroke", "#7c3aed").attr("stroke-width", 2.5)
+  .attr("d", d3.line().x(d => x(d.day)).y(d => y(d.aqi)).curve(d3.curveMonotoneX));
+
+const rule = svg.append("line").attr("stroke", "#140e29").attr("y1", m.t).attr("y2", H - m.b).style("opacity", 0);
+const dot = svg.append("circle").attr("r", 5).attr("fill", "#e11d48").style("opacity", 0);
+const label = svg.append("text").attr("font-weight", 700).style("opacity", 0);
+
+svg.on("pointermove", e => {
+  const [px] = d3.pointer(e);
+  const d = data[Math.max(0, Math.min(89, Math.round(x.invert(px)) - 1))];
+  rule.attr("x1", x(d.day)).attr("x2", x(d.day)).style("opacity", 0.4);
+  dot.attr("cx", x(d.day)).attr("cy", y(d.aqi)).style("opacity", 1);
+  label.attr("x", x(d.day) + 8).attr("y", y(d.aqi) - 10).text(`Day ${d.day}: AQI ${d.aqi}`).style("opacity", 1);
+}).on("pointerleave", () => { rule.style("opacity", 0); dot.style("opacity", 0); label.style("opacity", 0); });''',
+             hint="চার্টের উপর মাউস নাড়াও"),
+    ],
+    level="উন্নত", tag="ডেটা দিয়ে SVG/Canvas চালানো: যেকোনো কাস্টম ভিজুয়ালাইজেশন।",
+    tasks=["কাস্টম ও অ্যানিমেটেড চার্ট", "ফোর্স নেটওয়ার্ক, ট্রি, Sankey", "মানচিত্র (d3-geo)", "স্ক্রলিটেলিং ও ডেটা জার্নালিজম"],
+    caps=["scale, axis, shape, transition, force – সব আলাদা মডিউল", "যেকোনো DOM/SVG উপাদান ডেটার সাথে জোড়া", "জুম, ড্র্যাগ, ব্রাশ"],
+    limits=["তৈরি চার্ট নেই – সব নিজে বানাতে হয়", "শিখতে সময় লাগে", "সাধারণ চার্টের জন্য Chart.js বা Observable Plot সহজ"],
+    alt="Observable Plot, Vega-Lite, Apache ECharts",
+)
+
+jslib("ApexCharts",
+    about=("ApexCharts দিয়ে আধুনিক দেখতে SVG চার্ট বানানো যায়: এরিয়া, বার, রেডিয়াল গেজ, হিটম্যাপ। "
+           "জুম, টুলবার, annotation আর সুন্দর অ্যানিমেশন আগে থেকেই আছে।"),
+    install='npm install apexcharts\n<!-- অথবা: <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script> -->',
+    examples=[
+        jsex("apex", "জুমসহ এরিয়া চার্ট ও annotation",
+             "ওয়েবসাইটের দৈনিক ভিজিটর; একটা বিশেষ দিনে annotation, টুলবারে জুম আর ডাউনলোড।",
+             '''const visits = [];
+for (let i = 0; i < 60; i++) {
+  visits.push([Date.UTC(2026, 5, 1) + i * 86400000,
+               Math.round(400 + i * 12 + 120 * Math.sin(i / 3) + (i === 41 ? 900 : 0))]);
+}
+
+new ApexCharts(document.getElementById("app"), {
+  chart: { type: "area", height: "100%", zoom: { enabled: true }, toolbar: { show: true } },
+  series: [{ name: "Visitors", data: visits }],
+  xaxis: { type: "datetime" },
+  colors: ["#7c3aed"],
+  dataLabels: { enabled: false },
+  stroke: { curve: "smooth", width: 2.5 },
+  fill: { type: "gradient", gradient: { opacityFrom: 0.5, opacityTo: 0.05 } },
+  title: { text: "Website visitors" },
+  annotations: { xaxis: [{ x: visits[41][0], borderColor: "#e11d48",
+                           label: { text: "Post went viral", style: { background: "#e11d48", color: "#fff" } } }] }
+}).render();''', hint="চার্টে টেনে জুম করো"),
+        jsex("apex", "রেডিয়াল গেজ",
+             "তিনটা লক্ষ্যের অগ্রগতি % – গোল রিং আকারে, মাঝে গড়।",
+             '''new ApexCharts(document.getElementById("app"), {
+  chart: { type: "radialBar", height: "100%" },
+  series: [82, 64, 45],
+  labels: ["Course", "Project", "Thesis"],
+  colors: ["#7c3aed", "#0d9488", "#e11d48"],
+  plotOptions: {
+    radialBar: {
+      hollow: { size: "35%" },
+      track: { background: "#f3e8ff" },
+      dataLabels: {
+        name: { fontSize: "16px" },
+        value: { fontSize: "22px", formatter: v => v + "%" },
+        total: { show: true, label: "Average", formatter: w =>
+          Math.round(w.globals.series.reduce((a, b) => a + b, 0) / w.globals.series.length) + "%" }
+      }
+    }
+  },
+  legend: { show: true, position: "bottom" }
+}).render();'''),
+    ],
+    level="শুরু থেকে মাঝারি", tag="আধুনিক, অ্যানিমেটেড SVG চার্ট; ড্যাশবোর্ডের জন্য দারুণ।",
+    tasks=["অ্যাডমিন ড্যাশবোর্ড", "রেডিয়াল গেজ ও প্রগ্রেস", "annotation দেওয়া টাইম সিরিজ", "হিটম্যাপ ও ক্যান্ডেলস্টিক"],
+    caps=["জুম, প্যান, টুলবার, CSV/PNG ডাউনলোড", "annotation (রেখা, বিন্দু, লেবেল)", "React/Vue র‍্যাপার আছে"],
+    limits=["SVG বলে খুব বেশি বিন্দুতে ধীর", "3D বা ম্যাপ নেই"],
+    alt="Chart.js, Apache ECharts",
+)
+
+jslib("Vega-Lite",
+    about=("Vega-Lite-এ কোড না লিখে JSON-এ বলে দাও: কোন কলাম x, কোনটা y, কোনটা রং – চার্ট নিজে তৈরি হয়। "
+           "এক চার্টে নির্বাচন করলে আরেক চার্ট বদলায় (linked view)। Python-এর Altair এটাই তৈরি করে।"),
+    install='npm install vega vega-lite vega-embed\n<!-- অথবা CDN থেকে vega, vega-lite, vega-embed তিনটাই -->',
+    examples=[
+        jsex("vega", "ব্রাশ দিয়ে লিংক করা দুটো চার্ট",
+             "উপরের স্ক্যাটারে মাউস দিয়ে একটা এলাকা বাছাই করো – নিচের বার চার্ট শুধু সেই অংশের হিসাব দেখাবে।",
+             '''const data = [];
+let seed = 5;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+for (const [dept, base] of [["CSE", 70], ["EEE", 62], ["BBA", 66]]) {
+  for (let i = 0; i < 40; i++) {
+    const hours = rand() * 10;
+    data.push({ dept, hours: +hours.toFixed(1), marks: Math.round(base - 15 + hours * 4 + rand() * 12) });
+  }
+}
+
+vegaEmbed("#app", {
+  $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+  data: { values: data },
+  vconcat: [{
+    width: "container", height: 190,
+    params: [{ name: "brush", select: "interval" }],
+    mark: { type: "point", filled: true, size: 60 },
+    encoding: {
+      x: { field: "hours", type: "quantitative", title: "Study hours" },
+      y: { field: "marks", type: "quantitative", scale: { zero: false } },
+      color: { condition: { param: "brush", field: "dept", type: "nominal" }, value: "#ddd" }
+    }
+  }, {
+    width: "container", height: 90,
+    transform: [{ filter: { param: "brush" } }],
+    mark: "bar",
+    encoding: {
+      y: { field: "dept", type: "nominal", title: null },
+      x: { aggregate: "count", title: "Students selected" },
+      color: { field: "dept", type: "nominal", legend: null }
+    }
+  }]
+}, { actions: false });''', hint="উপরের চার্টে টেনে আয়তক্ষেত্র আঁকো"),
+        jsex("vega", "স্তূপ করা বার চার্ট",
+             "মাস অনুযায়ী বিদ্যুতের উৎস; শুধু JSON-এ x, y, রং বলে দেওয়া হয়েছে।",
+             '''const months = ["Jan","Feb","Mar","Apr","May","Jun"];
+const mix = { Gas: [60,58,55,52,50,49], Coal: [15,16,18,20,21,22], Solar: [3,4,5,6,7,8], Import: [10,10,11,11,12,12] };
+const values = [];
+for (const [source, arr] of Object.entries(mix)) {
+  arr.forEach((v, i) => values.push({ month: months[i], source, share: v }));
+}
+
+vegaEmbed("#app", {
+  $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+  title: "Electricity by source (TWh, sample)",
+  width: "container", height: 300,
+  data: { values },
+  mark: { type: "bar", cornerRadiusEnd: 3 },
+  encoding: {
+    x: { field: "month", type: "ordinal", sort: months, title: null },
+    y: { field: "share", type: "quantitative", stack: "zero", title: "TWh" },
+    color: { field: "source", type: "nominal",
+             scale: { range: ["#7c3aed", "#475569", "#d97706", "#0d9488"] } },
+    tooltip: [{ field: "source" }, { field: "share" }]
+  }
+}, { actions: false });'''),
+    ],
+    level="শুরু থেকে মাঝারি", tag="JSON লিখলেই চার্ট: গ্রামার অব গ্রাফিক্স, linked selection।",
+    tasks=["ডেটা এক্সপ্লোরেশন", "এক চার্টে বাছাই করে আরেক চার্ট ফিল্টার", "ফ্যাসেট (ছোট ছোট অনেক চার্ট)", "নোটবুক ও রিপোর্টে এম্বেড"],
+    caps=["encoding: x, y, color, size, shape, tooltip", "params দিয়ে brush, click, slider", "Altair (Python) এর আউটপুট এটাই"],
+    limits=["খুব কাস্টম ডিজাইনে সীমাবদ্ধ", "বড় ডেটা পুরোটা ব্রাউজারে যায়"],
+    alt="Observable Plot, D3.js, Plotly.js",
+)
+
+jslib("Observable Plot",
+    about=("Observable Plot হলো D3-এর নির্মাতাদের বানানো সংক্ষিপ্ত চার্ট লাইব্রেরি: Plot.dot, Plot.line, Plot.barY "
+           "এর মতো 'mark' দিয়ে এক-দুই লাইনে পরিসংখ্যান চার্ট। টুলটিপ (tip) নিজে থেকে।"),
+    install='npm install @observablehq/plot\n<!-- CDN: আগে d3, তারপর @observablehq/plot -->',
+    examples=[
+        jsex("plot", "টুলটিপসহ স্ক্যাটার ও ট্রেন্ড",
+             "উচ্চতা বনাম ওজন; লিঙ্গ অনুযায়ী রং, প্রতিটা দলের জন্য রিগ্রেশন রেখা।",
+             '''let seed = 9;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const people = d3.range(160).map(i => {
+  const sex = i % 2 ? "F" : "M";
+  const height = (sex === "M" ? 168 : 155) + (rand() - 0.5) * 22;
+  return { sex, height: +height.toFixed(1), weight: +(height * 0.9 - 88 + (rand() - 0.5) * 18).toFixed(1) };
+});
+
+const chart = Plot.plot({
+  width: 640, height: 380, grid: true,
+  color: { legend: true, range: ["#7c3aed", "#e11d48"] },
+  x: { label: "Height (cm)" }, y: { label: "Weight (kg)" },
+  marks: [
+    Plot.dot(people, { x: "height", y: "weight", stroke: "sex", r: 3.5, tip: true }),
+    Plot.linearRegressionY(people, { x: "height", y: "weight", stroke: "sex" })
+  ]
+});
+document.getElementById("app").append(chart);''', hint="বিন্দুর উপর মাউস রাখো"),
+        jsex("plot", "হিস্টোগ্রাম (binX)",
+             "নম্বরের বণ্টন – কাঁচা ডেটা দিলে Plot নিজেই ঘরে ভাগ করে গোনে।",
+             '''let seed = 21;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const normal = () => Math.sqrt(-2 * Math.log(rand())) * Math.cos(2 * Math.PI * rand());
+const marks = d3.range(500).map(() => ({ score: Math.max(0, Math.min(100, 65 + normal() * 12)) }));
+
+document.getElementById("app").append(Plot.plot({
+  width: 640, height: 360,
+  y: { grid: true, label: "Students" },
+  x: { label: "Marks" },
+  marks: [
+    Plot.rectY(marks, Plot.binX({ y: "count" }, { x: "score", thresholds: 25, fill: "#7c3aed", tip: true })),
+    Plot.ruleX([d3.mean(marks, d => d.score)], { stroke: "#e11d48", strokeWidth: 2, strokeDasharray: "4 3" }),
+    Plot.ruleY([0])
+  ]
+}));'''),
+    ],
+    level="শুরু", tag="এক-দুই লাইনে পরিসংখ্যান চার্ট; D3-এর সহজ রূপ।",
+    tasks=["দ্রুত ডেটা এক্সপ্লোরেশন", "হিস্টোগ্রাম, বক্স, স্ক্যাটার, রিগ্রেশন", "ফ্যাসেট চার্ট", "টুলটিপসহ রিপোর্ট চার্ট"],
+    caps=["mark + transform (binX, groupY, windowY…)", "স্বয়ংক্রিয় স্কেল ও লেজেন্ড", "SVG আউটপুট, যেকোনো পেজে বসানো যায়"],
+    limits=["অ্যানিমেশন ও জটিল ইন্টারঅ্যাকশন কম", "3D নেই"],
+    alt="Vega-Lite, D3.js, Chart.js",
+)
+
+jslib("uPlot",
+    about=("uPlot হলো খুব ছোট (~৫০ KB) আর খুব দ্রুত টাইম-সিরিজ চার্ট। লাখ লাখ বিন্দুও এক পলকে আঁকে, "
+           "তাই সেন্সর ডেটা, মনিটরিং ড্যাশবোর্ডের জন্য আদর্শ।"),
+    install='npm install uplot\n<!-- CDN: uPlot.iife.min.js + uPlot.min.css -->',
+    examples=[
+        jsex("uplot", "৫০,০০০ বিন্দুর সেন্সর ডেটা",
+             "তিনটা সেন্সরের ৫০ হাজার রিডিং একসাথে, তবু তাৎক্ষণিক; টেনে জুম, ডাবল-ক্লিকে রিসেট।",
+             '''const n = 50000, t0 = Date.UTC(2026, 0, 1) / 1000;
+const xs = new Float64Array(n), a = new Float64Array(n), b = new Float64Array(n), c = new Float64Array(n);
+for (let i = 0; i < n; i++) {
+  xs[i] = t0 + i * 60;                       // প্রতি মিনিটে একটা রিডিং
+  a[i] = 25 + 5 * Math.sin(i / 1440 * 2 * Math.PI) + Math.sin(i / 7) * 0.8;
+  b[i] = 22 + 4 * Math.sin(i / 1440 * 2 * Math.PI + 1) + Math.cos(i / 5) * 0.8;
+  c[i] = 18 + 3 * Math.sin(i / 1440 * 2 * Math.PI + 2) + Math.sin(i / 3) * 0.6;
+}
+
+const app = document.getElementById("app");
+const t = performance.now();
+const plot = new uPlot({
+  title: "50,000 sensor readings",
+  width: app.clientWidth, height: app.clientHeight - 30,
+  scales: { x: { time: true } },
+  series: [
+    {},
+    { label: "Room A °C", stroke: "#7c3aed", width: 1 },
+    { label: "Room B °C", stroke: "#0d9488", width: 1 },
+    { label: "Room C °C", stroke: "#e11d48", width: 1 }
+  ]
+}, [xs, a, b, c], app);
+const info = document.createElement("div");
+info.style.cssText = "position:absolute;right:10px;top:6px;font:12px monospace;color:#6b6288";
+info.textContent = "drawn in " + Math.round(performance.now() - t) + " ms";
+app.append(info);
+window.addEventListener("resize", () => plot.setSize({ width: app.clientWidth, height: app.clientHeight - 30 }));''',
+             hint="টেনে জুম, ডাবল-ক্লিকে রিসেট"),
+    ],
+    level="মাঝারি", tag="ক্ষুদ্র ও অতি-দ্রুত টাইম-সিরিজ চার্ট।",
+    tasks=["সেন্সর ও IoT ডেটা", "সার্ভার মনিটরিং ড্যাশবোর্ড", "লাইভ স্ট্রিমিং চার্ট", "লাখ বিন্দুর লাইন চার্ট"],
+    caps=["~৫০ KB, কোনো নির্ভরতা নেই", "লাখ লাখ বিন্দু মিলিসেকেন্ডে", "জুম, কার্সর, সিঙ্ক করা একাধিক চার্ট"],
+    limits=["শুধু লাইন/এরিয়া/বার ধরনের চার্ট", "সাজসজ্জার অপশন কম"],
+    alt="Chart.js, Plotly.js, Apache ECharts",
+)
+
+# ---------- Python লাইব্রেরি, যাদের আউটপুট ব্রাউজারেও একই চার্ট ----------
+
+more("plotly",
+    ex("রেঞ্জ স্লাইডারসহ লাইন চার্ট",
+       "দুই বছরের দৈনিক তাপমাত্রা, নিচে রেঞ্জ স্লাইডার। ডানে একই চার্ট ব্রাউজারে লাইভ (Plotly Python ভেতরে plotly.js-ই চালায়)।",
+       '''import math
+from datetime import date, timedelta
+import plotly.graph_objects as go
+
+start = date(2025, 1, 1)
+dates, dhaka, sylhet = [], [], []
+for i in range(730):
+    dates.append(start + timedelta(days=i))
+    season = math.sin((i % 365) / 365 * 2 * math.pi - 1.4)
+    dhaka.append(round(27 + 6 * season + math.sin(i * 1.7) * 1.5, 1))
+    sylhet.append(round(25 + 5 * season + math.cos(i * 1.3) * 1.5, 1))
+
+fig = go.Figure()
+fig.add_scatter(x=dates, y=dhaka, name="Dhaka", line_color="#7c3aed")
+fig.add_scatter(x=dates, y=sylhet, name="Sylhet", line_color="#0d9488")
+fig.update_layout(title="Daily temperature (°C)", hovermode="x unified")
+fig.update_xaxes(rangeslider_visible=True,
+                 rangeselector=dict(buttons=[
+                     dict(count=1, label="1m", step="month", stepmode="backward"),
+                     dict(count=6, label="6m", step="month", stepmode="backward"),
+                     dict(step="all", label="all")]))
+fig.write_html("temperature.html")   # ব্রাউজারে খোলো
+fig.show()''',
+       hint="লাইভ চার্ট: plotly.js দিয়ে একই ডেটা",
+       live=live("plotly", '''const dates = [], dhaka = [], sylhet = [];
+const start = Date.UTC(2025, 0, 1);
+for (let i = 0; i < 730; i++) {
+  dates.push(new Date(start + i * 86400000).toISOString().slice(0, 10));
+  const season = Math.sin(((i % 365) / 365) * 2 * Math.PI - 1.4);
+  dhaka.push(+(27 + 6 * season + Math.sin(i * 1.7) * 1.5).toFixed(1));
+  sylhet.push(+(25 + 5 * season + Math.cos(i * 1.3) * 1.5).toFixed(1));
+}
+Plotly.newPlot("app", [
+  { x: dates, y: dhaka, name: "Dhaka", line: { color: "#7c3aed" } },
+  { x: dates, y: sylhet, name: "Sylhet", line: { color: "#0d9488" } }
+], { title: "Daily temperature (°C)", hovermode: "x unified", margin: { t: 40, r: 10 },
+  xaxis: { rangeslider: { visible: true }, rangeselector: { buttons: [
+    { count: 1, label: "1m", step: "month", stepmode: "backward" },
+    { count: 6, label: "6m", step: "month", stepmode: "backward" },
+    { step: "all", label: "all" } ] } } }, { responsive: true });''')),
+    ex("ঘোরানো যায় এমন 3D সারফেস",
+       "sin(r)/r সারফেস, নিচে কনট্যুরের ছায়া। ব্রাউজারে মাউস দিয়ে ঘোরানো যায়।",
+       '''import numpy as np
+import plotly.graph_objects as go
+
+x = np.linspace(-8, 8, 60)
+X, Y = np.meshgrid(x, x)
+R = np.hypot(X, Y) + 1e-9
+Z = np.sin(R) / R
+
+fig = go.Figure(go.Surface(x=x, y=x, z=Z, colorscale="Viridis",
+                           contours_z=dict(show=True, usecolormap=True, project_z=True)))
+fig.update_layout(title="sin(r) / r", margin=dict(l=0, r=0, t=40, b=0),
+                  scene_camera=dict(eye=dict(x=1.6, y=1.6, z=0.9)))
+fig.write_html("surface.html")
+fig.show()''',
+       hint="লাইভ চার্ট: টেনে ঘোরাও",
+       live=live("plotly", '''const n = 60, xs = [], z = [];
+for (let i = 0; i < n; i++) xs.push(-8 + (16 * i) / (n - 1));
+for (const y of xs) z.push(xs.map(x => { const r = Math.hypot(x, y) + 1e-9; return Math.sin(r) / r; }));
+Plotly.newPlot("app", [{ type: "surface", x: xs, y: xs, z, colorscale: "Viridis",
+  contours: { z: { show: true, usecolormap: true, project: { z: true } } } }],
+  { title: "sin(r) / r", margin: { l: 0, r: 0, t: 40, b: 0 },
+    scene: { camera: { eye: { x: 1.6, y: 1.6, z: 0.9 } } } }, { responsive: true });''')),
+)
+
+man("plotly",
+    level="শুরু থেকে মাঝারি",
+    tag="ইন্টারঅ্যাকটিভ চার্ট: হোভার, জুম, ঘোরানো; HTML ফাইলে সেভ করে যে কাউকে পাঠানো যায়।",
+    tasks=["ইন্টারঅ্যাকটিভ HTML রিপোর্ট", "3D সারফেস ও স্ক্যাটার", "টাইম সিরিজ রেঞ্জ স্লাইডারসহ", "ম্যাপ ও choropleth", "Dash দিয়ে পুরো ওয়েব ড্যাশবোর্ড"],
+    caps=["plotly.express: এক লাইনে চার্ট", "graph_objects: সব কিছু নিজে নিয়ন্ত্রণ", "write_html / write_image (kaleido দিয়ে PNG)", "Jupyter-এ সরাসরি ইন্টারঅ্যাকটিভ"],
+    limits=["HTML ফাইল বড় হয় (plotly.js ভেতরে থাকে); include_plotlyjs='cdn' দিলে ছোট", "PNG সেভ করতে kaleido আলাদা ইনস্টল"],
+    alt="Plotly.js, bokeh, altair, matplotlib",
+)
+
+DETAILS["altair"] = dict(
+    about=("Altair দিয়ে পাইথনে ঘোষণামূলক (declarative) চার্ট বানানো যায়: কোন কলাম x, কোনটা y, কোনটা রং – "
+           "শুধু এটুকু বললেই হয়। আউটপুট হলো Vega-Lite JSON, তাই চার্টগুলো ব্রাউজারে ইন্টারঅ্যাকটিভ।"),
+    install="pip install altair pandas",
+    examples=[
+        ex("ব্রাশ দিয়ে লিংক করা চার্ট",
+           "উপরের স্ক্যাটারে এলাকা বাছাই করলে নিচের বার চার্ট শুধু সেই শিক্ষার্থীদের গোনে। লাইভ চার্টটা ঠিক এই কোড থেকে তৈরি হওয়া Vega-Lite।",
+           '''import random
+import altair as alt
+import pandas as pd
+
+random.seed(5)
+rows = []
+for dept, base in [("CSE", 70), ("EEE", 62), ("BBA", 66)]:
+    for _ in range(40):
+        hours = random.random() * 10
+        rows.append(dict(dept=dept, hours=round(hours, 1),
+                         marks=round(base - 15 + hours * 4 + random.random() * 12)))
+df = pd.DataFrame(rows)
+
+brush = alt.selection_interval()
+points = alt.Chart(df).mark_point(filled=True, size=60).encode(
+    x=alt.X("hours:Q", title="Study hours"),
+    y=alt.Y("marks:Q", scale=alt.Scale(zero=False)),
+    color=alt.condition(brush, "dept:N", alt.value("#ddd")),
+).add_params(brush).properties(width=500, height=190)
+
+bars = alt.Chart(df).mark_bar().encode(
+    y=alt.Y("dept:N", title=None),
+    x=alt.X("count():Q", title="Students selected"),
+    color=alt.Color("dept:N", legend=None),
+).transform_filter(brush).properties(width=500, height=90)
+
+chart = points & bars            # & মানে উপরে-নিচে
+chart.save("linked.html")''',
+           hint="লাইভ: উপরের চার্টে টেনে আয়তক্ষেত্র আঁকো",
+           live=live("vega", '''const data = [];
+let seed = 5;
+const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+for (const [dept, base] of [["CSE", 70], ["EEE", 62], ["BBA", 66]]) {
+  for (let i = 0; i < 40; i++) {
+    const hours = rand() * 10;
+    data.push({ dept, hours: +hours.toFixed(1), marks: Math.round(base - 15 + hours * 4 + rand() * 12) });
+  }
+}
+vegaEmbed("#app", { $schema: "https://vega.github.io/schema/vega-lite/v5.json", data: { values: data },
+  vconcat: [{ width: "container", height: 190, params: [{ name: "brush", select: "interval" }],
+    mark: { type: "point", filled: true, size: 60 },
+    encoding: { x: { field: "hours", type: "quantitative", title: "Study hours" },
+      y: { field: "marks", type: "quantitative", scale: { zero: false } },
+      color: { condition: { param: "brush", field: "dept", type: "nominal" }, value: "#ddd" } } },
+  { width: "container", height: 90, transform: [{ filter: { param: "brush" } }], mark: "bar",
+    encoding: { y: { field: "dept", type: "nominal", title: null },
+      x: { aggregate: "count", title: "Students selected" },
+      color: { field: "dept", type: "nominal", legend: null } } }] }, { actions: false });''')),
+        ex("স্তূপ করা বার ও টুলটিপ",
+           "মাস অনুযায়ী বিদ্যুতের উৎস; শুধু encode() দিয়ে x, y, রং, টুলটিপ বলে দেওয়া।",
+           '''import altair as alt
+import pandas as pd
+
+months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+mix = {"Gas": [60, 58, 55, 52, 50, 49], "Coal": [15, 16, 18, 20, 21, 22],
+       "Solar": [3, 4, 5, 6, 7, 8], "Import": [10, 10, 11, 11, 12, 12]}
+df = pd.DataFrame([dict(month=m, source=s, share=v)
+                   for s, vals in mix.items() for m, v in zip(months, vals)])
+
+chart = alt.Chart(df, title="Electricity by source (TWh, sample)").mark_bar(cornerRadiusEnd=3).encode(
+    x=alt.X("month:O", sort=months, title=None),
+    y=alt.Y("share:Q", stack="zero", title="TWh"),
+    color=alt.Color("source:N", scale=alt.Scale(range=["#7c3aed", "#475569", "#d97706", "#0d9488"])),
+    tooltip=["source", "share"],
+).properties(width=500, height=300)
+
+chart.save("energy.html")
+print(chart.to_json()[:300], "...")     # ভেতরে আসলে Vega-Lite JSON''',
+           hint="লাইভ: বারের উপর মাউস রাখো",
+           live=live("vega", '''const months = ["Jan","Feb","Mar","Apr","May","Jun"];
+const mix = { Gas: [60,58,55,52,50,49], Coal: [15,16,18,20,21,22], Solar: [3,4,5,6,7,8], Import: [10,10,11,11,12,12] };
+const values = [];
+for (const [source, arr] of Object.entries(mix)) arr.forEach((v, i) => values.push({ month: months[i], source, share: v }));
+vegaEmbed("#app", { $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+  title: "Electricity by source (TWh, sample)", width: "container", height: 300, data: { values },
+  mark: { type: "bar", cornerRadiusEnd: 3 },
+  encoding: { x: { field: "month", type: "ordinal", sort: months, title: null },
+    y: { field: "share", type: "quantitative", stack: "zero", title: "TWh" },
+    color: { field: "source", type: "nominal", scale: { range: ["#7c3aed", "#475569", "#d97706", "#0d9488"] } },
+    tooltip: [{ field: "source" }, { field: "share" }] } }, { actions: false });''')),
+    ],
+)
+man("altair",
+    level="শুরু থেকে মাঝারি",
+    tag="পাইথনে ঘোষণামূলক চার্ট; আউটপুট Vega-Lite, তাই ব্রাউজারে ইন্টারঅ্যাকটিভ।",
+    tasks=["pandas ডেটার দ্রুত এক্সপ্লোরেশন", "লিংক করা ইন্টারঅ্যাকটিভ চার্ট", "ফ্যাসেট চার্ট", "HTML/PNG/SVG রিপোর্ট"],
+    caps=["encode(): x, y, color, size, tooltip", "selection_interval / point দিয়ে ইন্টারঅ্যাকশন", "চার্ট জোড়া: | পাশাপাশি, & উপরে-নিচে, + স্তর"],
+    limits=["ডিফল্টে ৫০০০ সারির বেশি ডেটায় সতর্কতা (alt.data_transformers)", "PNG সেভে vl-convert লাগে"],
+    alt="Vega-Lite, plotly, matplotlib",
+)
+
+
+# ==================================================================
+# শোকেস: জটিল ও সুন্দর চার্ট (Matplotlib, seaborn, NetworkX)
+# ==================================================================
+
+SHOW = "শোকেস"
+
+more("matplotlib",
+    ex("রিজলাইন: মাসভিত্তিক তাপমাত্রা",
+       "১২ মাসের দৈনিক তাপমাত্রার বণ্টন একটার পেছনে আরেকটা পাহাড়ের মতো সাজানো; অন্ধকার পটভূমি আর plasma রঙে। KDE শুধু NumPy দিয়ে হিসাব করা।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(42)
+months = ["January", "February", "March", "April", "May", "June", "July",
+          "August", "September", "October", "November", "December"]
+means = [18, 21, 26, 29, 30, 29.5, 29, 29, 28.5, 27, 23, 19]
+spread = [3.2, 3.4, 3.0, 2.6, 2.4, 1.8, 1.5, 1.5, 1.7, 2.2, 2.8, 3.1]
+grid = np.linspace(8, 40, 400)
+
+def kde(x, grid, bw=0.9):
+    z = (grid[:, None] - x[None, :]) / bw
+    return np.exp(-0.5 * z ** 2).sum(1) / (len(x) * bw * np.sqrt(2 * np.pi))
+
+bg = "#0f0c1d"
+fig, ax = plt.subplots(figsize=(10, 9), facecolor=bg)
+ax.set_facecolor(bg)
+cmap = plt.get_cmap("plasma")
+gap = 0.11
+
+for i, (m, mu, sd) in enumerate(zip(months, means, spread)):
+    temps = np.concatenate([rng.normal(mu, sd, 280), rng.normal(mu + sd * 1.3, sd * 0.6, 60)])
+    y = kde(temps, grid)
+    base = (11 - i) * gap
+    color = cmap(0.15 + 0.75 * (mu - 18) / 12)
+    ax.fill_between(grid, base, base + y, color=color, alpha=0.92, zorder=20 - i)
+    ax.plot(grid, base + y, color="white", lw=1.2, zorder=20 - i)
+    ax.plot(grid, np.full_like(grid, base), color=bg, lw=2, zorder=20 - i)
+    ax.text(9, base + 0.02, m, color="white", fontsize=11, fontweight="bold", zorder=30)
+    ax.text(39.5, base + 0.02, f"{temps.mean():.1f}°", color="#e9e5ff", fontsize=10,
+            ha="right", zorder=30)
+
+ax.set_xlim(8, 40)
+ax.set_yticks([])
+for s in ax.spines.values():
+    s.set_visible(False)
+ax.tick_params(colors="#b9b3d6")
+ax.set_xlabel("Daily temperature (°C)", color="#b9b3d6", fontsize=11)
+fig.text(0.07, 0.94, "A year of heat in Dhaka", color="white", fontsize=22, fontweight="bold")
+fig.text(0.07, 0.915, "Distribution of daily temperatures by month (sample data)",
+         color="#b9b3d6", fontsize=12)
+plt.subplots_adjust(left=0.05, right=0.97, top=0.9, bottom=0.07)
+plt.show()''', hint=SHOW),
+
+    ex("বৃত্তাকার বার চার্ট",
+       "১২ মাসের বৃষ্টি একটা ঘড়ির মতো বৃত্তে; বারের রং মান অনুযায়ী, লেবেলগুলো বৃত্তের বাইরে ঘুরিয়ে বসানো, মাঝে বছরের মোট।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import colors
+
+months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+rain = np.array([7, 28, 65, 150, 280, 330, 380, 310, 300, 170, 30, 10])
+
+n = len(rain)
+theta = np.linspace(0, 2 * np.pi, n, endpoint=False)
+width = 2 * np.pi / n * 0.82
+inner = 210                                   # মাঝের ফাঁকা বৃত্ত
+norm = colors.Normalize(rain.min(), rain.max())
+cmap = plt.get_cmap("cool")
+
+fig = plt.figure(figsize=(8.5, 8.5), facecolor="#faf7ff")
+ax = fig.add_subplot(projection="polar", facecolor="#faf7ff")
+ax.set_theta_zero_location("N")
+ax.set_theta_direction(-1)
+bars = ax.bar(theta, rain, width=width, bottom=inner,
+              color=[cmap(norm(v)) for v in rain], edgecolor="white", linewidth=2)
+
+for t, v, m in zip(theta, rain, months):
+    angle = np.degrees(t)
+    rot = 90 - angle if angle <= 180 else 270 - angle
+    align = "left" if angle <= 180 else "right"
+    ax.text(t, inner + v + 18, f"{m}  {v}", rotation=rot, rotation_mode="anchor",
+            ha=align, va="center", fontsize=10.5, color="#2e1065", fontweight="bold")
+
+for r in (100, 200, 300):
+    ax.plot(np.linspace(0, 2 * np.pi, 200), np.full(200, inner + r),
+            color="#7c3aed", lw=0.6, alpha=0.25, ls="--")
+ax.text(0, 0, f"{rain.sum():,}\\nmm / year", ha="center", va="center",
+        fontsize=18, fontweight="bold", color="#140e29", linespacing=1.4)
+ax.set_ylim(0, inner + rain.max() + 90)
+ax.set_axis_off()
+fig.suptitle("Monsoon in a circle", fontsize=20, fontweight="bold", color="#140e29", y=0.96)
+plt.show()''', hint=SHOW),
+
+    ex("স্ট্রিমগ্রাফ",
+       "২০ বছরে কোন গানের ধারা কত জনপ্রিয় – মাঝখান ঘিরে ঢেউয়ের মতো স্তূপ (baseline='wiggle'), প্রতিটা স্রোতের ভেতরেই তার নাম।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(7)
+years = np.linspace(2005, 2025, 241)
+genres = ["Folk", "Band", "Hip-hop", "Pop", "Classical", "Indie", "EDM"]
+palette = ["#0d9488", "#0284c7", "#7c3aed", "#db2777", "#d97706", "#65a30d", "#e11d48"]
+
+def smooth(y, k=21):
+    w = np.hanning(k)
+    return np.convolve(np.pad(y, k, mode="edge"), w / w.sum(), mode="same")[k:-k]
+
+layers = []
+for i in range(len(genres)):
+    peak = 2006 + i * 2.9 + rng.uniform(-1, 1)
+    width = rng.uniform(2.2, 4)
+    base = rng.uniform(0.2, 0.5)
+    y = (base + rng.uniform(4, 7) * np.exp(-((years - peak) / width) ** 2)
+         + 1.5 * np.exp(-((years - peak - 6) / 3) ** 2) + rng.normal(0, 0.3, years.size))
+    layers.append(np.clip(smooth(y), 0.05, None))
+layers = np.array(layers)
+
+fig, ax = plt.subplots(figsize=(12, 5.5), facecolor="white")
+polys = ax.stackplot(years, layers, baseline="wiggle", colors=palette,
+                     edgecolor="white", linewidth=0.8, alpha=0.95)
+
+for poly, layer, name in zip(polys, layers, genres):
+    k = int(np.argmax(layer))                       # স্রোত যেখানে সবচেয়ে মোটা
+    path = poly.get_paths()[0].vertices
+    near = path[np.abs(path[:, 0] - years[k]) < (years[1] - years[0]) * 1.5]
+    if len(near) >= 2:
+        ax.text(years[k], near[:, 1].mean(), name, ha="center", va="center", color="white",
+                fontsize=10 + layer[k] * 1.4, fontweight="bold")
+
+ax.set_xlim(years[0], years[-1])
+ax.set_xticks(range(2005, 2026, 5), [str(y) for y in range(2005, 2026, 5)])
+ax.set_yticks([])
+for s in ("left", "right", "top"):
+    ax.spines[s].set_visible(False)
+ax.spines["bottom"].set_color("#bbb")
+ax.set_title("Twenty years of listening", loc="left", fontsize=20, fontweight="bold", pad=30)
+ax.text(0, 1.02, "Share of streams by genre (sample data)", transform=ax.transAxes,
+        color="#666", fontsize=11, va="bottom")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+
+    ex("উষ্ণায়নের স্ট্রাইপ ও বিচ্যুতি",
+       "উপরে বিখ্যাত 'warming stripes' – প্রতিটা দাগ এক বছর; নিচে একই ডেটা বার চার্টে, রং বিচ্যুতি অনুযায়ী, সাথে ১০ বছরের চলমান গড়।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import TwoSlopeNorm
+
+rng = np.random.default_rng(1)
+years = np.arange(1901, 2026)
+trend = 0.000065 * (years - 1900) ** 2 - 0.35
+anomaly = trend + 0.12 * np.sin((years - 1900) / 9) + rng.normal(0, 0.11, years.size)
+rolling = np.convolve(anomaly, np.ones(10) / 10, mode="valid")
+norm = TwoSlopeNorm(vmin=-0.7, vcenter=0, vmax=1.1)
+cmap = plt.get_cmap("RdBu_r")
+
+fig, (top, bottom) = plt.subplots(2, 1, figsize=(12, 7.5), height_ratios=[1, 1.6],
+                                  facecolor="white")
+top.imshow(anomaly[None, :], aspect="auto", cmap=cmap, norm=norm,
+           extent=[years[0] - 0.5, years[-1] + 0.5, 0, 1])
+top.set_axis_off()
+top.set_title("Warming stripes, 1901–2025", loc="left", fontsize=20, fontweight="bold")
+
+bottom.bar(years, anomaly, color=cmap(norm(anomaly)), width=0.85)
+bottom.plot(years[9:], rolling, color="#140e29", lw=2.5, label="10-year average")
+bottom.axhline(0, color="#999", lw=0.8)
+bottom.set_xlim(years[0] - 1, years[-1] + 1)
+bottom.set_ylabel("Temperature anomaly (°C)")
+for s in ("top", "right"):
+    bottom.spines[s].set_visible(False)
+hot = int(np.argmax(anomaly))
+bottom.annotate(f"Warmest: {years[hot]} (+{anomaly[hot]:.2f}°C)",
+                xy=(years[hot], anomaly[hot]), xytext=(1960, anomaly[hot] + 0.1),
+                arrowprops=dict(arrowstyle="->", color="#444"), fontsize=11)
+bottom.legend(frameon=False, loc="upper left")
+fig.text(0.125, 0.02, "Sample data shaped like a real temperature record", color="#888", fontsize=9)
+plt.tight_layout(rect=(0, 0.03, 1, 1))
+plt.show()''', hint=SHOW),
+
+    ex("নিয়ন গ্লো লাইন চার্ট",
+       "অন্ধকার পটে জ্বলজ্বলে রেখা: প্রতিটা লাইন কয়েকবার মোটা-স্বচ্ছ করে আঁকা, নিচে ঝাপসা আলো, শেষ বিন্দুতে নাম ও মান।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(5)
+days = np.arange(60)
+series = {
+    "Python":     ("#22d3ee", 50 + np.cumsum(rng.normal(0.6, 2.0, 60))),
+    "JavaScript": ("#f472b6", 48 + np.cumsum(rng.normal(0.3, 2.2, 60))),
+    "Rust":       ("#a3e635", 20 + np.cumsum(rng.normal(0.5, 1.4, 60))),
+}
+
+bg = "#0b0820"
+fig, ax = plt.subplots(figsize=(11, 5.8), facecolor=bg)
+ax.set_facecolor(bg)
+
+for name, (color, y) in series.items():
+    for lw, alpha in [(22, 0.03), (16, 0.05), (10, 0.08), (6, 0.14), (2.6, 1)]:
+        ax.plot(days, y, color=color, lw=lw, alpha=alpha, solid_capstyle="round")
+    ax.scatter(days[-1], y[-1], s=90, color=color, zorder=5, edgecolor="white", linewidth=1.5)
+    ax.text(days[-1] + 1.2, y[-1], f"{name}\\n{y[-1]:.0f}", color=color, va="center",
+            fontsize=11, fontweight="bold")
+
+ax.grid(color="#2a2350", lw=0.7)
+ax.set_xlim(0, 68)
+ax.tick_params(colors="#8b85b1")
+for s in ax.spines.values():
+    s.set_visible(False)
+ax.set_xlabel("Day", color="#8b85b1")
+ax.set_title("Search interest, last 60 days", loc="left", color="white",
+             fontsize=20, fontweight="bold", pad=16)
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+
+    ex("হেক্সবিন ঘনত্ব ও মার্জিনাল হিস্টোগ্রাম",
+       "২০,০০০ বিন্দুর ঘনত্ব ছয়কোণা ঘরে; উপরে ও ডানে দুই অক্ষের আলাদা বণ্টন; নিজের বানানো বেগুনি colormap, GridSpec লেআউট।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+
+rng = np.random.default_rng(3)
+n = 20000
+x = np.concatenate([rng.normal(30, 6, n // 2), rng.normal(48, 5, n // 2)])
+y = 0.9 * x + rng.normal(0, 7, n) + np.where(x > 40, 8, 0)
+cmap = LinearSegmentedColormap.from_list("violet", ["#faf7ff", "#c4b5fd", "#7c3aed", "#2e1065", "#0b0820"])
+
+fig = plt.figure(figsize=(9, 9), facecolor="white")
+gs = fig.add_gridspec(2, 2, width_ratios=(5, 1.1), height_ratios=(1.1, 5),
+                      wspace=0.04, hspace=0.04)
+ax = fig.add_subplot(gs[1, 0])
+top = fig.add_subplot(gs[0, 0], sharex=ax)
+right = fig.add_subplot(gs[1, 1], sharey=ax)
+
+hb = ax.hexbin(x, y, gridsize=45, cmap=cmap, mincnt=1, linewidths=0.2, edgecolors="white")
+top.hist(x, bins=70, color="#7c3aed", alpha=0.85)
+right.hist(y, bins=70, color="#0d9488", alpha=0.85, orientation="horizontal")
+for a in (top, right):
+    a.axis("off")
+
+r = np.corrcoef(x, y)[0, 1]
+ax.text(0.03, 0.95, f"r = {r:.2f}\\nn = {n:,}", transform=ax.transAxes, va="top",
+        fontsize=13, fontweight="bold", color="#140e29",
+        bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="#e9d5ff"))
+ax.set_xlabel("Age")
+ax.set_ylabel("Monthly spending (×100 Tk)")
+cax = ax.inset_axes([0.6, 0.1, 0.35, 0.03])
+cb = fig.colorbar(hb, cax=cax, orientation="horizontal")
+cax.xaxis.set_label_position("top")
+cb.set_label("People per cell", labelpad=4)
+fig.suptitle("Who spends how much?", x=0.12, ha="left", fontsize=20, fontweight="bold", y=0.95)
+plt.show()''', hint=SHOW),
+
+    ex("ছোট ছোট অনেক চার্ট (small multiples)",
+       "১২টা শহর, প্রতিটার আলাদা প্যানেল; প্যানেলে সব শহর ধূসর পটভূমিতে, শুধু সেই শহরটা রঙিন – তুলনা খুব সহজ।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(9)
+cities = ["Dhaka", "Delhi", "Cairo", "Lagos", "Tokyo", "Paris",
+          "Moscow", "Sydney", "Lima", "Toronto", "Nairobi", "Oslo"]
+base = [26, 25, 22, 27, 16, 12, 6, 18, 19, 8, 19, 6]
+amp = [5, 9, 7, 2, 10, 8, 14, -5, -3, 13, 2, 9]
+m = np.arange(12)
+temps = {c: b + a * np.sin((m - 3.5) / 12 * 2 * np.pi) + rng.normal(0, 0.6, 12)
+         for c, b, a in zip(cities, base, amp)}
+colors = plt.get_cmap("turbo")(np.linspace(0.08, 0.92, 12))
+
+fig, axes = plt.subplots(3, 4, figsize=(13, 8.5), sharex=True, sharey=True, facecolor="white")
+for ax, city, color in zip(axes.flat, cities, colors):
+    for other in cities:
+        ax.plot(m, temps[other], color="#d6d3e0", lw=1)
+    ax.plot(m, temps[city], color=color, lw=3)
+    ax.fill_between(m, temps[city], -10, color=color, alpha=0.12)
+    ax.set_title(city, loc="left", fontsize=13, fontweight="bold", color=color)
+    ax.text(11, temps[city][-1], f"{temps[city].mean():.0f}°", ha="right", va="bottom",
+            fontsize=10, color="#444")
+    ax.set_ylim(-10, 38)
+    ax.set_xticks([0, 3, 6, 9], ["Jan", "Apr", "Jul", "Oct"])
+    ax.grid(axis="y", color="#eee")
+    for s in ("top", "right", "left"):
+        ax.spines[s].set_visible(False)
+    ax.tick_params(length=0)
+fig.suptitle("Monthly temperature in 12 cities (°C)", x=0.06, ha="left",
+             fontsize=20, fontweight="bold")
+fig.text(0.06, 0.915, "Each panel highlights one city against all the others (sample data)",
+         color="#666", fontsize=11)
+plt.tight_layout(rect=(0, 0, 1, 0.92))
+plt.show()''', hint=SHOW),
+
+    ex("আলো-ছায়ার 3D ভূখণ্ড",
+       "LightSource দিয়ে পাহাড়ে সূর্যের আলো আর ছায়া, gist_earth রঙ, নিচে উচ্চতার কনট্যুর প্রজেকশন।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import LightSource
+
+n = 160
+x = np.linspace(-3, 3, n)
+X, Y = np.meshgrid(x, x)
+Z = (1.6 * np.exp(-((X - 0.8) ** 2 + (Y - 0.5) ** 2) * 1.2)
+     + 1.1 * np.exp(-((X + 1.2) ** 2 + (Y + 0.9) ** 2) * 1.8)
+     + 0.6 * np.exp(-((X + 0.5) ** 2 + (Y - 1.6) ** 2) * 2.5)
+     + 0.04 * np.sin(X * 4) * np.cos(Y * 3))
+
+ls = LightSource(azdeg=315, altdeg=35)
+rgb = ls.shade(Z, cmap=plt.get_cmap("terrain"), vert_exag=0.6, blend_mode="soft", vmin=-0.4, vmax=2)
+
+fig = plt.figure(figsize=(11, 8), facecolor="#f8fafc")
+ax = fig.add_subplot(projection="3d", facecolor="#f8fafc")
+ax.plot_surface(X, Y, Z, rstride=1, cstride=1, facecolors=rgb,
+                linewidth=0, antialiased=False, shade=False)
+ax.set_zlim(-0.3, 2)
+ax.view_init(elev=32, azim=-60)
+ax.set_box_aspect((1, 1, 0.45))
+ax.set_axis_off()
+ax.set_title("Shaded relief of an imaginary island", fontsize=18, fontweight="bold", pad=0)
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+
+    ex("জলবায়ু স্পাইরাল",
+       "১৯৮০–২০২৫ প্রতিটা বছর এক পাক; বছর যত এগোয় রং তত উষ্ণ আর বৃত্ত তত বাইরে। ১.৫°C ও ২°C সীমা লাল বৃত্তে।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(12)
+years = np.arange(1980, 2026)
+months = np.arange(12)
+theta = np.linspace(0, 2 * np.pi, 12, endpoint=False)
+offset = 1.0
+
+bg = "#07051a"
+fig = plt.figure(figsize=(9, 9), facecolor=bg)
+ax = fig.add_subplot(projection="polar", facecolor=bg)
+ax.set_theta_zero_location("N")
+ax.set_theta_direction(-1)
+cmap = plt.get_cmap("inferno")
+
+for i in range(len(years)):
+    anom = 0.15 + 0.028 * i + 0.12 * np.sin(theta * 2 + i) + rng.normal(0, 0.06, 12)
+    t = np.linspace(0, 2 * np.pi, 241)                       # মসৃণ বক্ররেখা
+    r = np.interp(t, np.r_[theta, 2 * np.pi], np.r_[anom, anom[0]], period=2 * np.pi)
+    k = np.hanning(25)
+    k /= k.sum()
+    r = np.convolve(np.r_[r[-12:], r, r[:12]], k, mode="same")[12:-12] + offset
+    ax.plot(t, r, color=cmap(0.2 + 0.75 * i / len(years)), lw=1.5, alpha=0.9)
+
+for level, label in [(1.5, "1.5°C"), (2.0, "2.0°C")]:
+    ax.plot(np.linspace(0, 2 * np.pi, 300), np.full(300, level + offset), color="#ef4444", lw=1.4)
+    ax.text(np.radians(20), level + offset + 0.06, label, color="#ef4444", fontsize=11, fontweight="bold")
+
+ax.set_xticks(theta, ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], color="#cfc8f5", fontsize=11)
+ax.set_yticks([])
+ax.set_ylim(0, 3.3)
+ax.spines["polar"].set_visible(False)
+ax.grid(color="#2a2350")
+ax.text(0, 0, f"{years[0]}\\n–\\n{years[-1]}", ha="center", va="center",
+        color="white", fontsize=18, fontweight="bold")
+fig.subplots_adjust(top=0.86, bottom=0.05)
+fig.suptitle("Climate spiral", color="white", fontsize=22, fontweight="bold", y=0.975)
+fig.text(0.5, 0.925, "Monthly temperature anomaly, one loop per year (sample data)",
+         ha="center", color="#a09ac4", fontsize=11)
+plt.show()''', hint=SHOW),
+
+    ex("ডাম্বেল চার্ট: আগে বনাম এখন",
+       "১৪টা জেলার সাক্ষরতার হার ২০০০ আর ২০২৫-এ; প্রতিটা সারিতে দুই বিন্দু ও তাদের মাঝে রঙিন রেখা, পরিবর্তন অনুযায়ী সাজানো।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+
+districts = ["Dhaka", "Chattogram", "Sylhet", "Khulna", "Rajshahi", "Barishal", "Rangpur",
+             "Mymensingh", "Cumilla", "Bogura", "Jessore", "Noakhali", "Dinajpur", "Pabna"]
+before = np.array([62, 55, 41, 52, 47, 50, 39, 37, 49, 44, 51, 46, 40, 43])
+after = np.array([88, 82, 71, 80, 76, 79, 72, 68, 81, 74, 80, 78, 73, 72])
+order = np.argsort(after - before)
+districts = [districts[i] for i in order]
+before, after = before[order], after[order]
+y = np.arange(len(districts))
+
+fig, ax = plt.subplots(figsize=(10, 8), facecolor="white")
+for yi, b, a in zip(y, before, after):
+    ax.plot([b, a], [yi, yi], color="#c4b5fd", lw=5, solid_capstyle="round", zorder=1)
+    ax.text(a + 1.2, yi, f"+{a - b}", va="center", fontsize=10, color="#7c3aed", fontweight="bold")
+ax.scatter(before, y, s=140, color="#94a3b8", zorder=2, label="2000", edgecolor="white", linewidth=1.5)
+ax.scatter(after, y, s=140, color="#7c3aed", zorder=3, label="2025", edgecolor="white", linewidth=1.5)
+
+ax.set_yticks(y, districts, fontsize=11)
+ax.set_xlim(30, 96)
+ax.set_xlabel("Literacy rate (%)")
+ax.grid(axis="x", color="#eee")
+for s in ("top", "right", "left"):
+    ax.spines[s].set_visible(False)
+ax.tick_params(axis="y", length=0)
+ax.legend(ncols=2, frameon=False, loc="lower left", fontsize=11)
+ax.set_title("Literacy rose everywhere – fastest at the top", loc="left",
+             fontsize=18, fontweight="bold", pad=14)
+fig.text(0.02, 0.01, "Sample data for illustration", color="#999", fontsize=9)
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+)
+
+more("seaborn",
+    ex("ক্লাস্টার হিটম্যাপ ও ডেনড্রোগ্রাম",
+       "৩০টা জিনের ১৬টা নমুনায় প্রকাশ; মিল অনুযায়ী সারি-কলাম নিজে থেকে সাজানো, পাশে গাছের মতো ডেনড্রোগ্রাম আর নমুনার দলের রঙ। (scipy লাগে)",
+       '''import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(4)
+samples = [f"S{i:02d}" for i in range(1, 17)]
+groups = np.repeat(["Control", "Drug A", "Drug B", "Drug C"], 4)
+genes = [f"GENE{i:02d}" for i in range(1, 31)]
+data = rng.normal(0, 1, (30, 16))
+data[:8, 4:8] += 2.5        # Drug A তে কিছু জিন বাড়ে
+data[8:16, 8:12] += 2.2     # Drug B
+data[16:22, 12:] -= 2.0     # Drug C তে কিছু কমে
+data[22:, :4] += 1.6
+df = pd.DataFrame(data, index=genes, columns=samples)
+
+lut = dict(zip(["Control", "Drug A", "Drug B", "Drug C"], ["#94a3b8", "#7c3aed", "#0d9488", "#e11d48"]))
+col_colors = pd.Series(groups, index=samples).map(lut)
+
+g = sns.clustermap(df, cmap="vlag", center=0, col_colors=col_colors, figsize=(10, 10),
+                   dendrogram_ratio=(0.14, 0.12), linewidths=0.4, linecolor="white",
+                   cbar_pos=(0.02, 0.86, 0.025, 0.1), cbar_kws=dict(label="z-score"))
+g.ax_heatmap.set_xlabel("")
+g.ax_heatmap.tick_params(labelsize=8)
+for name, color in lut.items():
+    g.ax_col_dendrogram.bar(0, 0, color=color, label=name, linewidth=0)
+g.ax_col_dendrogram.legend(ncols=4, loc="center", bbox_to_anchor=(0.5, 1.12), frameon=False)
+g.figure.suptitle("Gene expression clusters", x=0.55, y=1.04, fontsize=18, fontweight="bold")
+plt.show()''', hint=SHOW),
+
+    ex("রিজ প্লট (FacetGrid)",
+       "seaborn-এর FacetGrid দিয়ে ১০টা দলের বণ্টন একটার উপর আরেকটা; সারিগুলো একটু করে ঢাকা পড়ে (hspace ঋণাত্মক), cubehelix রঙ।",
+       '''import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+sns.set_theme(style="white", rc={"axes.facecolor": (0, 0, 0, 0)})
+rng = np.random.default_rng(10)
+labels = [f"Batch {c}" for c in "ABCDEFGHIJ"]
+x = np.concatenate([rng.normal(i * 0.55, 1 + (i % 3) * 0.15, 400) for i in range(10)])
+df = pd.DataFrame(dict(x=x, g=np.repeat(labels, 400)))
+
+pal = sns.cubehelix_palette(10, rot=-0.25, light=0.7)
+g = sns.FacetGrid(df, row="g", hue="g", aspect=12, height=0.62, palette=pal)
+g.map(sns.kdeplot, "x", bw_adjust=0.6, clip_on=False, fill=True, alpha=1, linewidth=1.5)
+g.map(sns.kdeplot, "x", clip_on=False, color="w", lw=2, bw_adjust=0.6)
+g.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
+
+def label(x, color, label):
+    ax = plt.gca()
+    ax.text(0, 0.2, label, fontweight="bold", color=color, ha="left", va="center",
+            transform=ax.transAxes)
+g.map(label, "x")
+
+g.figure.subplots_adjust(hspace=-0.3)
+g.set_titles("")
+g.set(yticks=[], ylabel="", xlabel="Measured value")
+g.despine(bottom=True, left=True)
+g.figure.suptitle("Ten production batches", x=0.12, ha="left", y=1.0, fontsize=18, fontweight="bold")
+plt.show()''', hint=SHOW),
+
+    ex("অন্ধকার পটে মসৃণ ঘনত্ব",
+       "হাজার বিন্দুর স্ক্যাটার, তার নিচে 2D হিস্টোগ্রাম (mako), উপরে সাদা KDE কনট্যুর – seaborn-এর তিনটা স্তর একসাথে।",
+       '''import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+sns.set_theme(style="dark")
+rng = np.random.default_rng(2)
+n = 6000
+mean, cov = [0, 0], [(2, 0.9), (0.9, 1)]
+x, y = rng.multivariate_normal(mean, cov, n).T
+x2, y2 = rng.multivariate_normal([3.5, 2.5], [(0.6, -0.3), (-0.3, 0.5)], n // 3).T
+x, y = np.r_[x, x2], np.r_[y, y2]
+
+f, ax = plt.subplots(figsize=(9, 7.5))
+sns.scatterplot(x=x, y=y, s=4, color=".15", linewidth=0)
+sns.histplot(x=x, y=y, bins=60, pthresh=0.08, cmap="mako")
+sns.kdeplot(x=x, y=y, levels=6, color="w", linewidths=1.2)
+ax.set(xlabel="Feature 1", ylabel="Feature 2")
+ax.set_title("Two overlapping populations", loc="left", fontsize=18, fontweight="bold")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+
+    ex("দুই দলের জয়েন্ট KDE",
+       "jointplot(kind='kde', hue=...) – মাঝে দুই দলের ভরাট কনট্যুর, উপরে-ডানে তাদের আলাদা বণ্টন।",
+       '''import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+sns.set_theme(style="ticks")
+rng = np.random.default_rng(6)
+a = rng.multivariate_normal([165, 60], [[40, 25], [25, 60]], 500)
+b = rng.multivariate_normal([175, 74], [[45, 30], [30, 80]], 500)
+df = pd.DataFrame(np.vstack([a, b]), columns=["height", "weight"])
+df["group"] = ["Group A"] * 500 + ["Group B"] * 500
+
+g = sns.jointplot(data=df, x="height", y="weight", hue="group", kind="kde",
+                  fill=True, alpha=0.55, levels=8, height=8,
+                  palette=["#7c3aed", "#e11d48"])
+g.set_axis_labels("Height (cm)", "Weight (kg)", fontsize=12)
+g.figure.suptitle("Height and weight in two groups", y=1.02, fontsize=18, fontweight="bold")
+plt.show()''', hint=SHOW),
+)
+
+more("networkx",
+    ex("কমিউনিটি রঙে নেটওয়ার্ক",
+       "বিখ্যাত Karate Club নেটওয়ার্ক (লাইব্রেরির ভেতরেই থাকে): মডুলারিটি দিয়ে কমিউনিটি খুঁজে রঙ, বিন্দুর মাপ = সংযোগ সংখ্যা, অন্ধকার পটে আলোকিত।",
+       '''import matplotlib.pyplot as plt
+import networkx as nx
+from networkx.algorithms.community import greedy_modularity_communities
+
+G = nx.karate_club_graph()
+communities = greedy_modularity_communities(G)
+palette = ["#22d3ee", "#f472b6", "#a3e635", "#fbbf24", "#a78bfa"]
+color = {n: palette[i % len(palette)] for i, c in enumerate(communities) for n in c}
+
+pos = nx.spring_layout(G, seed=7, k=0.35)
+deg = dict(G.degree())
+bg = "#0b0820"
+fig, ax = plt.subplots(figsize=(10, 8.5), facecolor=bg)
+ax.set_facecolor(bg)
+
+same = [(u, v) for u, v in G.edges if color[u] == color[v]]
+cross = [(u, v) for u, v in G.edges if color[u] != color[v]]
+nx.draw_networkx_edges(G, pos, edgelist=cross, edge_color="#4b4470", width=0.8, alpha=0.6, ax=ax)
+nx.draw_networkx_edges(G, pos, edgelist=same, edge_color=[color[u] for u, v in same],
+                       width=1.6, alpha=0.55, ax=ax)
+nodes = list(G.nodes)
+sizes = [80 + deg[n] * 55 for n in nodes]
+nx.draw_networkx_nodes(G, pos, nodelist=nodes, node_size=[s * 2.2 for s in sizes],
+                       node_color=[color[n] for n in nodes], alpha=0.15, ax=ax)   # আলোর আভা
+nx.draw_networkx_nodes(G, pos, nodelist=nodes, node_size=sizes,
+                       node_color=[color[n] for n in nodes], edgecolors="white", linewidths=1.2, ax=ax)
+hubs = sorted(deg, key=deg.get, reverse=True)[:5]
+nx.draw_networkx_labels(G, pos, labels={n: str(n) for n in hubs}, font_color="#0b0820",
+                        font_weight="bold", font_size=10, ax=ax)
+
+ax.set_axis_off()
+ax.set_title(f"Karate club: {len(communities)} communities found", color="white",
+             fontsize=18, fontweight="bold", loc="left")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
 )

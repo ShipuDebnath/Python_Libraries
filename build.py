@@ -6,7 +6,8 @@ build.py - "Python Library Atlas" ওয়েবসাইট বানায়
 - details.py     : যেসব লাইব্রেরির ব্যাখ্যা, উদাহরণ ও field manual লেখা হয়েছে
 - outputs.json   : render.py দিয়ে চালানো উদাহরণের আউটপুট (চার্টের ছবি, টার্মিনালের লেখা)
 
-চালাও:  python build.py
+চালাও:  python build.py            → index.html + img/ ফোল্ডার (GitHub Pages-এর জন্য)
+        python build.py --inline   → সব ছবি index.html-এর ভেতরে (একটা ফাইলেই সব)
 """
 
 import json
@@ -60,7 +61,10 @@ def load():
                 if o and o.get("hash") != h:
                     o = None                                   # কোড বদলেছে, পুরোনো আউটপুট বাদ
                 item["ex"].append(dict(t=e["title"], d=e["about"], hint=e.get("hint"), code=e["code"],
-                                       out=o and {k: o.get(k) for k in ("status", "text", "images", "files", "reason")}))
+                                       lang=e.get("lang", "python"), live=e.get("live"),
+                                       out=None if e.get("lang") == "js" else
+                                       o and {k: o.get(k) for k in ("status", "text", "images", "files", "reason")}))
+        item["ex"].sort(key=lambda e: e.get("hint") != "শোকেস")   # শোকেস আগে
         out.append(item)
 
     cat_order = []
@@ -84,8 +88,42 @@ def load():
     return cats, out
 
 
+def export_images(libs, inline=False):
+    """outputs.json-এর ছবিগুলো img/ ফোল্ডারে আলাদা ফাইল হিসেবে লেখা।
+    (ছবি HTML-এর ভেতরে data: হিসেবে থাকলে অনেক ব্রাউজার/প্রিভিউ সেগুলো দেখায় না)"""
+    import base64
+    import hashlib
+    if inline:
+        return 0
+    folder = ROOT / "img"
+    folder.mkdir(exist_ok=True)
+    keep = set()
+    for l in libs:
+        for e in l["ex"]:
+            o = e["out"]
+            if not o or not o.get("images"):
+                continue
+            paths = []
+            for uri in o["images"]:
+                head, b64 = uri.split(",", 1)
+                ext = head.split("/")[1].split(";")[0]          # webp / png
+                raw = base64.b64decode(b64)
+                name = hashlib.sha1(raw).hexdigest()[:16] + "." + ext
+                if not (folder / name).exists():
+                    (folder / name).write_bytes(raw)
+                keep.add(name)
+                paths.append("img/" + name)
+            o["images"] = paths
+    for f in folder.iterdir():                                  # পুরোনো ছবি মুছে ফেলা
+        if f.name not in keep:
+            f.unlink()
+    return len(keep)
+
+
 def build():
+    import sys
     cats, libs = load()
+    n_files = export_images(libs, inline="--inline" in sys.argv)
     data = json.dumps(dict(cats=cats, libs=libs), ensure_ascii=False).replace("</", "<\\/")
     n_full = sum(l["full"] for l in libs)
     n_ex = sum(len(l["ex"]) for l in libs)
@@ -95,7 +133,8 @@ def build():
                     .replace("__DATA__", data))
     (ROOT / "index.html").write_text(page, encoding="utf-8")
     print(f"index.html তৈরি ✔  {len(libs)}টা লাইব্রেরি · {n_full}টা সম্পূর্ণ · "
-          f"{n_ex}টা উদাহরণ · {n_img}টায় ছবি · {(ROOT / 'index.html').stat().st_size / 1e6:.1f} MB")
+          f"{n_ex}টা উদাহরণ · {n_img}টায় ছবি · {(ROOT / 'index.html').stat().st_size / 1e6:.1f} MB"
+          + (f" · img/ ফোল্ডারে {n_files}টা ছবি" if n_files else " · ছবি HTML-এর ভেতরে"))
 
 
 TEMPLATE = r"""<!doctype html>
@@ -234,6 +273,11 @@ h1,h2,h3,h4{font-family:var(--disp);letter-spacing:-.02em}
 .stage img{display:block;width:100%;height:auto;max-height:560px;object-fit:contain;background:#fff;cursor:zoom-in}
 .stage .dots{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:rgba(20,14,41,.55);padding:5px 8px;border-radius:99px}
 .stage .dots button{width:8px;height:8px;border-radius:50%;border:0;background:rgba(255,255,255,.5);cursor:pointer;padding:0}.stage .dots button.on{background:#fff}
+.stage.live{display:block;background:#fff}.stage.live iframe{display:block;width:100%;height:430px;border:0;background:#fff}
+.stage.live .boot{height:430px;display:grid;place-items:center;color:var(--mut);font-size:13px}
+.livechip{font:700 10px var(--sans);letter-spacing:.08em;color:#fff;background:linear-gradient(135deg,#e11d48,#d97706);border-radius:99px;padding:2px 8px;white-space:nowrap}
+.livechip:before{content:"● "}
+.ex:fullscreen .stage.live iframe,.ex.pfs .stage.live iframe{height:calc(100vh - 150px)}
 .term{width:100%;align-self:stretch;margin:0;background:#140e29;color:#e9d5ff;font:12.5px/1.6 var(--mono);padding:16px 18px 16px 18px;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto}
 .term:before{content:"● ● ●  output";display:block;color:#6b6288;font-size:10.5px;letter-spacing:.12em;margin-bottom:8px}
 .term.sub{max-height:200px;border-top:1px solid rgba(255,255,255,.08)}
@@ -318,39 +362,49 @@ function copy(txt,msg){try{navigator.clipboard.writeText(txt).then(()=>toast(msg
 /* ---------- Python syntax highlight ---------- */
 const KW=new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case'.split(' '));
 const BI=new Set('print len range open int float str list dict set tuple sum min max sorted enumerate zip map filter abs round isinstance type super input any all next iter bool'.split(' '));
-function hl(src){let o='',i=0;const n=src.length;
+const JSKW=new Set('const let var function return new this if else for of in while do break continue class extends import from export default async await try catch finally throw typeof instanceof null undefined true false switch case'.split(' '));
+function hl(src,lang){const js=lang==='js',kw=js?JSKW:KW;let o='',i=0;const n=src.length;
  while(i<n){const ch=src[i];
-  if(ch==='#'){let j=src.indexOf('\n',i);if(j<0)j=n;o+='<span class="c">'+esc(src.slice(i,j))+'</span>';i=j;continue;}
-  if(ch==='"'||ch==="'"){let q=src.startsWith(ch.repeat(3),i)?ch.repeat(3):ch,j=i+q.length;
+  if((!js&&ch==='#')||(js&&ch==='/'&&src[i+1]==='/')){let j=src.indexOf('\n',i);if(j<0)j=n;o+='<span class="c">'+esc(src.slice(i,j))+'</span>';i=j;continue;}
+  if(js&&ch==='`'){let j=i+1;while(j<n&&src[j]!=='`'){if(src[j]==='\\')j++;j++;}j=Math.min(n,j+1);o+='<span class="s">'+esc(src.slice(i,j))+'</span>';i=j;continue;}
+  if(ch==='"'||ch==="'"){let q=!js&&src.startsWith(ch.repeat(3),i)?ch.repeat(3):ch,j=i+q.length;
    while(j<n&&!src.startsWith(q,j)){if(src[j]==='\\')j++;if(q.length===1&&src[j]==='\n')break;j++;}j=Math.min(n,j+q.length);
-   let k=i;while(k>0&&/[rbfuRBFU]/.test(src[k-1]))k--;o=o.slice(0,o.length-(i-k));o+='<span class="s">'+esc(src.slice(k,j))+'</span>';i=j;continue;}
+   let k=i;while(!js&&k>0&&/[rbfuRBFU]/.test(src[k-1]))k--;o=o.slice(0,o.length-(i-k));o+='<span class="s">'+esc(src.slice(k,j))+'</span>';i=j;continue;}
   if(/[0-9]/.test(ch)&&!/[\w]/.test(src[i-1]||'')){let j=i;while(j<n&&/[0-9._xXa-fA-FeE]/.test(src[j]))j++;o+='<span class="n">'+esc(src.slice(i,j))+'</span>';i=j;continue;}
   if(/[A-Za-z_]/.test(ch)){let j=i;while(j<n&&/\w/.test(src[j]))j++;const w=src.slice(i,j);
-   if(KW.has(w))o+='<span class="k">'+w+'</span>';else if(src[j]==='(')o+='<span class="'+(BI.has(w)?'b':'f')+'">'+w+'</span>';else o+=esc(w);i=j;continue;}
+   if(kw.has(w))o+='<span class="k">'+w+'</span>';else if(src[j]==='(')o+='<span class="'+(!js&&BI.has(w)?'b':'f')+'">'+w+'</span>';else o+=esc(w);i=j;continue;}
   o+=esc(ch);i++;}
  return o;}
 
 /* ---------- pieces ---------- */
 function libIcon(L,size){const c=CATMAP[L.cat].col,ini=L.name.replace(/[^A-Za-z0-9]/g,'').slice(0,2);const s=size?';width:'+size+'px;height:'+size+'px;font-size:'+size*.36+'px;border-radius:'+size*.3+'px':'';return '<div class="ico" style="background:linear-gradient(135deg,'+c+',#1c1636)'+s+'">'+esc(ini.charAt(0).toUpperCase()+ini.slice(1))+'</div>';}
-function firstImg(L){for(const e of L.ex)if(e.out&&e.out.images&&e.out.images.length)return e.out.images[0];return null;}
+function firstImg(L){const has=e=>e.out&&e.out.images&&e.out.images.length;const pick=L.ex.slice(2).find(has)||L.ex.find(has);return pick?pick.out.images[0]:null;}
 function firstText(L){for(const e of L.ex)if(e.out&&e.out.text)return e.out.text;return L.ex.length?L.ex[0].code:null;}
+function liveDoc(lv){const css=(lv.css||[]).map(u=>'<link rel="stylesheet" href="'+u+'">').join('');
+ const js=(lv.cdn||[]).map(u=>'<script src="'+u+'" onerror="window.__libfail=1;show(\'লাইব্রেরি লোড হয়নি – ইন্টারনেট সংযোগ লাগে\')"><\/script>').join('');
+ return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+css+'<style>html,body{margin:0;height:100%;background:#fff;font-family:system-ui,-apple-system,sans-serif;overflow:hidden}#app{position:relative;width:100%;height:100%;box-sizing:border-box;padding:10px}#app>svg{display:block}button{font:600 12px system-ui;border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;border-radius:99px;padding:6px 14px;cursor:pointer;z-index:5}#err{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:20px;color:#6b6288;font-size:14px;background:#faf7ff}</style></head><body><div id="app"></div><div id="err"></div><script>function show(m){var e=document.getElementById("err");e.style.display="grid";e.textContent="⚠ "+m;}window.onerror=function(m){show(m);};<\/script>'+js+'<script>window.addEventListener("load",function(){if(window.__libfail)return;try{'+lv.js.replace(/<\/script/gi,'<\\/script')+'\n}catch(e){show(e.message);}});<\/script></body></html>';}
+function bootLive(st,X){if(st._on)return;st._on=true;const f=document.createElement('iframe');f.title=X.t;f.setAttribute('sandbox','allow-scripts');f.setAttribute('loading','lazy');f.srcdoc=liveDoc(X.live);st.innerHTML='';st.appendChild(f);}
+const LIO='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){bootLive(e.target,e.target._X);LIO.unobserve(e.target);}}),{rootMargin:'200px'}):null;
 function stageHTML(X){const o=X.out;
+ if(X.live)return '<div class="stage live"><div class="boot">লাইভ ডেমো লোড হচ্ছে…</div></div>';
  if(o&&o.images&&o.images.length){return '<div class="stage">'+'<img loading="lazy" alt="'+esc(X.t)+'" src="'+o.images[0]+'">'+(o.images.length>1?'<div class="dots">'+o.images.map((_,k)=>'<button data-k="'+k+'"'+(k?'':' class="on"')+' aria-label="ছবি '+(k+1)+'"></button>').join('')+'</div>':'')+'</div>'+(o.text?'<pre class="term sub">'+esc(o.text)+'</pre>':'');}
  if(o&&o.text)return '<div class="stage"><pre class="term">'+esc(o.text)+'</pre></div>';
  const why=o&&o.reason||'আউটপুট এখনো তৈরি হয়নি';
  return '<div class="stage"><div class="skip"><div class="big">▶</div><b>নিজের কম্পিউটারে চালাও</b>'+esc(why)+', তাই এখানে আগে থেকে চালানো যায়নি। নিচের <span class="kbd">&lt;/&gt;</span> বাটনে কোড দেখো।</div></div>';}
 function mountEx(L,X,i,into,showLib){const el=document.createElement('article');el.className='ex rv';el.id='ex-'+L.id+'-'+(i+1);
  const o=X.out||{};
- el.innerHTML='<header><span class="no">'+pad2(i+1)+'</span><h4 title="'+esc(X.t)+'">'+esc(X.t)+'</h4>'+(showLib?'<a class="libs" href="#/l/'+L.id+'">'+esc(L.name)+'</a>':'')+'<div class="tb"><button data-a="link" title="এই উদাহরণের লিংক কপি">🔗</button><button data-a="code" title="কোড দেখাও">&lt;/&gt;</button><button data-a="wide" title="চওড়া করো">⤢</button><button data-a="fs" title="ফুলস্ক্রিন">⛶</button></div></header>'
+ el.innerHTML='<header><span class="no">'+pad2(i+1)+'</span><h4 title="'+esc(X.t)+'">'+esc(X.t)+'</h4>'+(X.live?'<span class="livechip">লাইভ</span>':'')+(showLib?'<a class="libs" href="#/l/'+L.id+'">'+esc(L.name)+'</a>':'')+'<div class="tb">'+(X.live?'<button data-a="re" title="আবার চালাও">↻</button>':'')+'<button data-a="link" title="এই উদাহরণের লিংক কপি">🔗</button><button data-a="code" title="কোড দেখাও">&lt;/&gt;</button><button data-a="wide" title="চওড়া করো">⤢</button><button data-a="fs" title="ফুলস্ক্রিন">⛶</button></div></header>'
   +stageHTML(X)+(o.files&&o.files.length?'<div class="files">তৈরি হলো: '+o.files.map(f=>'<span>'+esc(f)+'</span>').join('')+'</div>':'')
   +'<div class="exd"><p>'+esc(X.d||'')+'</p>'+(X.hint?'<span class="hint">'+esc(X.hint)+'</span>':'')+'</div>'
-  +'<div class="cwrap" hidden><button class="copy">কোড কপি</button><pre class="code">'+hl(X.code)+'</pre></div>';
+  +'<div class="cwrap" hidden><button class="copy">কোড কপি</button><pre class="code">'+hl(X.code,X.lang)+'</pre></div>';
  const tb=el.querySelector('.tb');
+ if(X.live){const st=el.querySelector('.stage');st._X=X;if(LIO)LIO.observe(st);else bootLive(st,X);}
  tb.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.a;
   if(a==='code'){const w=el.querySelector('.cwrap');w.hidden=!w.hidden;b.classList.toggle('on',!w.hidden);}
   if(a==='wide'){el.classList.toggle('wide');b.classList.toggle('on');}
   if(a==='link')copy(location.href.split('#')[0]+'#/l/'+L.id+'/'+(i+1),'লিংক কপি হয়েছে');
-  if(a==='fs')fullscreen(el);});
+  if(a==='fs')fullscreen(el);
+  if(a==='re'){const st=el.querySelector('.stage');st._on=false;bootLive(st,X);}});
  el.querySelector('.copy').onclick=()=>copy(X.code,'কোড কপি হয়েছে');
  const img=el.querySelector('.stage img');if(img)img.onclick=()=>fullscreen(el);
  el.querySelectorAll('.dots button').forEach(b=>b.onclick=ev=>{ev.stopPropagation();img.src=o.images[+b.dataset.k];el.querySelectorAll('.dots button').forEach(x=>x.classList.toggle('on',x===b));});
@@ -361,7 +415,7 @@ function pfs(el){const on=el.classList.toggle('pfs');document.body.style.overflo
 function tile(L,into){const a=document.createElement('a');a.className='tile rv';a.href='#/l/'+L.id;
  const img=firstImg(L),txt=!img&&L.full?firstText(L):null,c=CATMAP[L.cat].col;
  const pv=img?'<img loading="lazy" alt="" src="'+img+'">':txt?'<pre>'+esc(txt.split('\n').slice(0,12).join('\n'))+'</pre>':'<div class="ph">'+esc(L.name.replace(/[^A-Za-z0-9]/g,'').slice(0,2))+'</div>';
- a.innerHTML='<div class="pv"'+(img||txt?'':' style="background:linear-gradient(135deg,'+c+'cc,#1c1636)"')+'>'+pv+'</div><div class="m"><b>'+esc(L.name)+'</b> '+(L.full?'<span class="badge">✓ সম্পূর্ণ</span>':'<span class="badge soon">শীঘ্রই</span>')+(L.kind==='javascript'?' <span class="badge js">JS</span>':'')+'<p>'+esc(L.tag)+'</p><small>'+(L.full?bn(L.ex.length)+'টা উদাহরণ':bn(L.nIdeas)+'টা প্রজেক্ট আইডিয়া')+'</small></div>';
+ a.innerHTML='<div class="pv"'+(img||txt?'':' style="background:linear-gradient(135deg,'+c+'cc,#1c1636)"')+'>'+pv+'</div><div class="m"><b>'+esc(L.name)+'</b> '+(L.full?'<span class="badge">✓ সম্পূর্ণ</span>':'<span class="badge soon">শীঘ্রই</span>')+(L.kind==='javascript'?' <span class="badge js">JS</span>':'')+(L.ex.some(e=>e.live)?' <span class="livechip">লাইভ</span>':'')+'<p>'+esc(L.tag)+'</p><small>'+(L.full?bn(L.ex.length)+'টা উদাহরণ':bn(L.nIdeas)+'টা প্রজেক্ট আইডিয়া')+'</small></div>';
  into.appendChild(a);}
 
 /* ---------- views ---------- */
@@ -372,12 +426,15 @@ function reveal(){const els=$main().querySelectorAll('.rv');if(!('IntersectionOb
  setTimeout(()=>$main().querySelectorAll('.rv').forEach(e=>io.observe(e)),0);}
 function viewHome(){const nEx=LIBS.reduce((a,l)=>a+l.ex.length,0),nImg=LIBS.reduce((a,l)=>a+l.ex.filter(e=>e.out&&e.out.images&&e.out.images.length).length,0);
  const w=setView('<section class="hero"><canvas id="herocv"></canvas><div><div class="crumb">পাইথন লাইব্রেরি আর্কাইভ · বাংলা সংস্করণ</div><h1>সব লাইব্রেরি, <em>চোখের সামনে</em>।</h1><p>পাইথনের ৬৪৫টা লাইব্রেরির জীবন্ত সংগ্রহ। প্রতিটা সম্পূর্ণ লাইব্রেরিতে আছে চালানো উদাহরণ, তার আসল আউটপুট (চার্ট, ফাইল, টার্মিনাল), পুরো কোড, প্রজেক্ট আর একটা field manual।</p><div class="stats"><div><b>'+bn(LIBS.length)+'</b><small>লাইব্রেরি</small></div><div><b>'+bn(FULL.length)+'</b><small>সম্পূর্ণ</small></div><div><b>'+bn(nEx)+'</b><small>উদাহরণ</small></div><div><b>'+bn(nImg)+'</b><small>ছবিসহ আউটপুট</small></div><div><b>'+bn(CATS.length)+'</b><small>ক্যাটাগরি</small></div></div><div class="note"><b>উদাহরণ কীভাবে কাজ করে:</b> প্রতিটা কোড আগে থেকে আসলেই চালানো হয়েছে, কার্ডে তার সত্যিকারের আউটপুট দেখানো আছে। কার্ডের <span class="kbd">&lt;/&gt;</span> বাটনে কোড, <span class="kbd">⛶</span> দিয়ে বড় করে দেখা।</div></div></section>'
- +'<section class="sec"><h2>সেরা উদাহরণ</h2><p class="lead">ডেটা ভিজুয়ালাইজেশন দিয়ে শুরু: আসল কোড, আসল চার্ট।</p><div class="exs" id="feat"></div></section>'
+ +'<section class="sec"><h2>শোকেস</h2><p class="lead">পত্রিকা আর গবেষণাপত্রের মানের চার্ট – প্রতিটার পুরো পাইথন কোড আছে, <span class="kbd">&lt;/&gt;</span> চাপলেই দেখবে।</p><div class="exs" id="feat"></div></section>'
  +'<section class="sec"><h2>ক্যাটাগরি অনুযায়ী দেখো</h2><p class="lead">একটা ক্যাটাগরি বেছে নাও, অথবা <span class="kbd">/</span> চেপে সব লাইব্রেরি আর উদাহরণে খোঁজো।</p><div class="cats" id="cats"></div></section>'
  +'<section class="sec"><h2>সম্পূর্ণ লাইব্রেরি</h2><p class="lead">এগুলোতে উদাহরণ, আউটপুট আর প্রজেক্ট সব আছে।</p><div class="tiles" id="done"></div></section>'
  +'<footer>© __YEAR__ · Python দিয়ে বানানো 🐍 · তালিকা: Library Atlas · কিবোর্ড: <span class="kbd">/</span> খোঁজো · <span class="kbd">[</span> <span class="kbd">]</span> আগের / পরের লাইব্রেরি</footer>');
  const feat=w.querySelector('#feat');let k=0;
- for(const L of FULL){for(let i=0;i<L.ex.length&&k<6;i++){const X=L.ex[i];if(i>=2&&X.out&&X.out.images&&X.out.images.length){mountEx(L,X,i,feat,true);k++;i+=2;}}if(k>=6)break;}
+ const liveFeat=[['d3-js',0],['apache-echarts',1]];
+ const showcase=[];FULL.forEach(L=>L.ex.forEach((X,i)=>{if(X.hint==='শোকেস'&&X.out&&X.out.images&&X.out.images.length)showcase.push([L,X,i]);}));
+ const pickIdx=[0,4,8,10,2,13];pickIdx.forEach(j=>{const s=showcase[j];if(s)mountEx(s[0],s[1],s[2],feat,true);});
+ liveFeat.forEach(([id,i])=>{const L=LIBMAP[id];if(L&&L.ex[i])mountEx(L,L.ex[i],i,feat,true);});
  const cats=w.querySelector('#cats');CATS.forEach(c=>{const ls=LIBS.filter(l=>l.cat===c.id),d=ls.filter(l=>l.full).length;
   cats.insertAdjacentHTML('beforeend','<a class="cat rv" href="#/c/'+c.id+'"><i style="background:'+c.col+'"></i><b>'+esc(c.name)+'</b><p>'+esc(c.blurb)+'</p><div class="bar"><i style="width:'+(100*d/ls.length)+'%;background:'+c.col+'"></i></div><small>'+bn(ls.length)+'টা লাইব্রেরি · '+bn(d)+'টা সম্পূর্ণ</small></a>');});
  const dn=w.querySelector('#done');FULL.forEach(L=>tile(L,dn));
@@ -394,7 +451,7 @@ function viewLib(id,exn){const L=LIBMAP[id];if(!L)return viewHome();const c=CATM
   +'<div class="box"><h5>যা যা বানানো যায়</h5><ul>'+m.tasks.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>'
   +(m.caps.length?'<div class="box"><h5>ক্ষমতা</h5><ul>'+m.caps.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>':'')
   +'<div class="box">'+(m.limits.length?'<h5>সীমাবদ্ধতা</h5><ul class="lim">'+m.limits.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+'<h5 style="margin-top:'+(m.limits.length?14:0)+'px">ইনস্টল</h5><p><code>'+esc(L.install).replace(/\n/g,'</code><br><code>')+'</code></p>'+(m.alt?'<h5 style="margin-top:14px">বিকল্প</h5><p>'+m.alt.split(',').map(linkLib).join(', ')+'</p>':'')+'</div>'
-  +'<div class="box code"><header><h5 style="margin:0">শুরুর কোড</h5><button class="btn" id="cp">কপি</button></header><pre class="code">'+hl(L.ex[0].code)+'</pre></div></div></section>';}
+  +'<div class="box code"><header><h5 style="margin:0">শুরুর কোড</h5><button class="btn" id="cp">কপি</button></header><pre class="code">'+hl(L.ex[0].code,L.ex[0].lang)+'</pre></div></div></section>';}
  else{h+='<div class="soonbig"><div style="font-size:34px">⏳</div><b>এই লাইব্রেরির উদাহরণ শীঘ্রই আসছে</b><p>'+esc(L.tag)+' নিচে Atlas থেকে নেওয়া প্রজেক্টের আইডিয়াগুলো দেখো।</p></div>'
   +'<section class="sec"><h2>কী বানানো যায়</h2><p class="lead">'+bn(L.nIdeas)+'টা প্রজেক্ট আইডিয়া'+(L.nIdeas>L.ideas.length?' (প্রথম '+bn(L.ideas.length)+'টা)':'')+'।</p><ul class="ideas">'+L.ideas.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></section>';}
  h+='<div class="pn"><a class="glass" href="#/l/'+P.id+'"><small>← আগের</small><b>'+esc(P.name)+'</b></a><a class="glass r" href="#/l/'+N.id+'"><small>পরের →</small><b>'+esc(N.name)+'</b></a></div>';
