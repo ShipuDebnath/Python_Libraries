@@ -5525,3 +5525,442 @@ ax.set_title(f"Karate club: {len(communities)} communities found", color="white"
 plt.tight_layout()
 plt.show()''', hint=SHOW),
 )
+
+
+# ==================================================================
+# শোকেস ২: ML, বিজ্ঞান, ছবি প্রসেসিং, ডেটা
+# ==================================================================
+
+more("scikit-learn",
+    ex("ক্লাসিফায়ারের সিদ্ধান্ত-সীমার তুলনা",
+       "৩টা ডেটাসেট × ৫টা মডেল: প্রতিটা মডেল জায়গাটাকে কীভাবে দুই রঙে ভাগ করে আর টেস্টে কত নম্বর পায়। scikit-learn-এর বিখ্যাত ছবির নিজস্ব সংস্করণ।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
+from sklearn.datasets import make_circles, make_classification, make_moons
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.inspection import DecisionBoundaryDisplay
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+
+X, y = make_classification(n_features=2, n_redundant=0, n_informative=2,
+                           random_state=1, n_clusters_per_class=1)
+X += 2 * np.random.default_rng(2).uniform(size=X.shape)
+datasets = [make_moons(noise=0.3, random_state=0),
+            make_circles(noise=0.2, factor=0.5, random_state=1), (X, y)]
+models = {
+    "Nearest neighbors": KNeighborsClassifier(3),
+    "Linear SVM": SVC(kernel="linear", C=0.025),
+    "RBF SVM": SVC(gamma=2, C=1),
+    "Random forest": RandomForestClassifier(max_depth=5, n_estimators=50, random_state=0),
+    "Neural net": MLPClassifier(alpha=1, max_iter=1500, random_state=0),
+}
+cm = plt.get_cmap("PuOr")
+dots = ListedColormap(["#7c3aed", "#d97706"])
+
+fig, axes = plt.subplots(3, 6, figsize=(17, 8.5), facecolor="white")
+for r, (X, y) in enumerate(datasets):
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.4, random_state=42)
+    ax = axes[r, 0]
+    ax.scatter(X_tr[:, 0], X_tr[:, 1], c=y_tr, cmap=dots, edgecolors="white", s=26)
+    ax.scatter(X_te[:, 0], X_te[:, 1], c=y_te, cmap=dots, alpha=0.5, edgecolors="white", s=26)
+    if r == 0:
+        ax.set_title("Input data", fontweight="bold")
+    for c, (name, model) in enumerate(models.items(), start=1):
+        ax = axes[r, c]
+        clf = make_pipeline(StandardScaler(), model).fit(X_tr, y_tr)
+        score = clf.score(X_te, y_te)
+        DecisionBoundaryDisplay.from_estimator(clf, X, cmap=cm, alpha=0.75, ax=ax, eps=0.5)
+        ax.scatter(X_tr[:, 0], X_tr[:, 1], c=y_tr, cmap=dots, edgecolors="white", s=22)
+        ax.scatter(X_te[:, 0], X_te[:, 1], c=y_te, cmap=dots, edgecolors="black", s=22, alpha=0.6)
+        ax.text(0.95, 0.06, f"{score:.2f}", transform=ax.transAxes, ha="right", fontsize=13,
+                fontweight="bold", bbox=dict(boxstyle="round", fc="white", ec="none", alpha=0.8))
+        if r == 0:
+            ax.set_title(name, fontweight="bold")
+for ax in axes.flat:
+    ax.set_xticks([]); ax.set_yticks([]); ax.set_xlabel(""); ax.set_ylabel("")
+fig.suptitle("How five classifiers split the same data", x=0.02, ha="left",
+             fontsize=20, fontweight="bold")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+
+    ex("ক্লাস্টারিং পদ্ধতির তুলনা",
+       "৩ ধরনের আকৃতির ডেটায় K-Means, DBSCAN, Agglomerative আর Gaussian Mixture – কোনটা কোথায় ঠিকমতো দল চেনে, অন্ধকার পটে।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import DBSCAN, AgglomerativeClustering, KMeans
+from sklearn.datasets import make_blobs, make_moons
+from sklearn.mixture import GaussianMixture
+from sklearn.preprocessing import StandardScaler
+
+rng = np.random.default_rng(0)
+blobs, _ = make_blobs(n_samples=700, centers=4, cluster_std=[0.9, 0.6, 1.2, 0.5], random_state=8)
+moons, _ = make_moons(n_samples=700, noise=0.06, random_state=1)
+aniso, _ = make_blobs(n_samples=700, centers=3, random_state=170)
+aniso = aniso @ np.array([[0.6, -0.64], [-0.41, 0.85]])
+data = {"Blobs": (blobs, 4), "Moons": (moons, 2), "Stretched": (aniso, 3)}
+
+palette = np.array(["#22d3ee", "#f472b6", "#a3e635", "#fbbf24", "#a78bfa", "#fb7185"])
+bg = "#0b0820"
+fig, axes = plt.subplots(3, 4, figsize=(15, 11), facecolor=bg)
+for r, (dname, (X, k)) in enumerate(data.items()):
+    X = StandardScaler().fit_transform(X)
+    algos = {
+        "K-Means": KMeans(n_clusters=k, n_init=10, random_state=0).fit_predict(X),
+        "DBSCAN": DBSCAN(eps=0.3 if dname != "Blobs" else 0.25, min_samples=8).fit_predict(X),
+        "Agglomerative": AgglomerativeClustering(
+            n_clusters=k, linkage="single" if dname == "Moons" else "ward").fit_predict(X),
+        "Gaussian mixture": GaussianMixture(n_components=k, covariance_type="full",
+                                            random_state=0).fit(X).predict(X),
+    }
+    for c, (aname, labels) in enumerate(algos.items()):
+        ax = axes[r, c]
+        ax.set_facecolor(bg)
+        colors = np.where(labels >= 0, palette[labels % len(palette)], "#4b4470")   # -1 = noise
+        ax.scatter(X[:, 0], X[:, 1], c=colors, s=9, linewidths=0)
+        n = len(set(labels) - {-1})
+        ax.text(0.97, 0.04, f"{n} clusters", transform=ax.transAxes, ha="right",
+                color="#cfc8f5", fontsize=10)
+        ax.set_xticks([]); ax.set_yticks([])
+        for s in ax.spines.values():
+            s.set_color("#2a2350")
+        if r == 0:
+            ax.set_title(aname, color="white", fontweight="bold", fontsize=13)
+        if c == 0:
+            ax.set_ylabel(dname, color="white", fontsize=13, fontweight="bold")
+fig.suptitle("Same points, four ways to find groups", color="white", x=0.02, ha="left",
+             fontsize=20, fontweight="bold")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+
+    ex("হাতে লেখা অঙ্কের t-SNE ম্যাপ",
+       "৬৪ মাত্রার ১৭৯৭টা অঙ্কের ছবি t-SNE দিয়ে ২ মাত্রায় নামানো – একই অঙ্ক নিজে থেকে এক জায়গায় জড়ো হয়; প্রতিটা দলের মাঝে একটা আসল ছবি।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+from sklearn.datasets import load_digits
+from sklearn.manifold import TSNE
+
+digits = load_digits()
+emb = TSNE(n_components=2, init="pca", perplexity=35, random_state=0).fit_transform(digits.data)
+colors = plt.get_cmap("tab10")
+
+fig, ax = plt.subplots(figsize=(11, 9.5), facecolor="white")
+for d in range(10):
+    pts = emb[digits.target == d]
+    ax.scatter(pts[:, 0], pts[:, 1], s=14, color=colors(d), alpha=0.75, linewidths=0)
+    cx, cy = np.median(pts, axis=0)
+    idx = np.where(digits.target == d)[0][0]
+    img = OffsetImage(digits.images[idx], zoom=3.2, cmap="gray_r")
+    ax.add_artist(AnnotationBbox(img, (cx, cy), frameon=True,
+                                 bboxprops=dict(edgecolor=colors(d), linewidth=2.5, boxstyle="round,pad=0.2")))
+    ax.text(cx, cy - 6.5, str(d), ha="center", fontsize=16, fontweight="bold", color=colors(d))
+
+ax.set_xticks([]); ax.set_yticks([])
+for s in ax.spines.values():
+    s.set_visible(False)
+ax.set_title("1,797 handwritten digits, organised by t-SNE", loc="left",
+             fontsize=20, fontweight="bold", pad=30)
+ax.text(0, 1.015, "Each dot is one 8×8 image; nobody told the algorithm which digit is which",
+        transform=ax.transAxes, color="#666", fontsize=11, va="bottom")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+)
+
+more("scipy",
+    ex("Lorenz attractor",
+       "solve_ivp দিয়ে বিখ্যাত বিশৃঙ্খল (chaotic) সমীকরণ সমাধান; পথটা সময় অনুযায়ী রং বদলায় (LineCollection), অন্ধকার পটে প্রজাপতির ডানা।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
+from scipy.integrate import solve_ivp
+
+def lorenz(t, s, sigma=10, rho=28, beta=8 / 3):
+    x, y, z = s
+    return [sigma * (y - x), x * (rho - z) - y, x * y - beta * z]
+
+t = np.linspace(0, 60, 30000)
+sol = solve_ivp(lorenz, (0, 60), [1, 1, 1], t_eval=t, rtol=1e-9, atol=1e-9)
+x, y, z = sol.y
+
+bg = "#05030f"
+fig, ax = plt.subplots(figsize=(11, 8.5), facecolor=bg)
+ax.set_facecolor(bg)
+points = np.column_stack([x, z])
+segs = np.stack([points[:-1], points[1:]], axis=1)
+for lw, alpha in [(4, 0.05), (1.6, 0.15), (0.6, 0.9)]:
+    lc = LineCollection(segs, cmap="plasma", linewidth=lw, alpha=alpha)
+    lc.set_array(t[:-1])
+    ax.add_collection(lc)
+ax.autoscale()
+ax.set_axis_off()
+ax.set_title("The Lorenz attractor", color="white", fontsize=22, fontweight="bold", loc="left")
+ax.text(0, 0.985, "x–z projection of 60 seconds of chaos, coloured by time",
+        transform=ax.transAxes, color="#a09ac4", fontsize=11)
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+
+    ex("Voronoi ও Delaunay শিল্প",
+       "৩০০টা এলোমেলো বিন্দু থেকে Voronoi কোষ (প্রতিটা কোষ = নিকটতম বিন্দুর এলাকা), আকার অনুযায়ী রং, উপরে Delaunay ত্রিভুজের জাল।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.collections import PolyCollection
+from scipy.spatial import Delaunay, Voronoi
+
+rng = np.random.default_rng(11)
+pts = np.vstack([rng.uniform(0, 1, (220, 2)),
+                 rng.normal([0.68, 0.38], 0.08, (80, 2))])           # একটা ঘন এলাকা
+far = np.array([[-5, -5], [-5, 6], [6, -5], [6, 6]])                # ধারের কোষ বন্ধ রাখতে
+vor = Voronoi(np.vstack([pts, far]))
+
+polys, areas = [], []
+for i in range(len(pts)):
+    region = vor.regions[vor.point_region[i]]
+    if -1 in region or not region:
+        continue
+    poly = vor.vertices[region]                      # অক্ষের বাইরে অংশ নিজে থেকেই কাটা পড়ে
+    x, y = poly[:, 0], poly[:, 1]
+    polys.append(poly)
+    areas.append(0.5 * abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1))))
+areas = np.array(areas)
+
+fig, ax = plt.subplots(figsize=(10, 10), facecolor="#0b0820")
+ax.set_facecolor("#0b0820")
+pc = PolyCollection(polys, array=np.log(areas + 1e-6), cmap="magma_r",
+                    edgecolors="#0b0820", linewidths=1.6)
+ax.add_collection(pc)
+tri = Delaunay(pts)
+ax.triplot(pts[:, 0], pts[:, 1], tri.simplices, color="white", lw=0.35, alpha=0.35)
+ax.scatter(pts[:, 0], pts[:, 1], s=6, color="white", zorder=3)
+ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+ax.set_aspect("equal")
+ax.set_axis_off()
+ax.set_title("Voronoi cells and Delaunay mesh", color="white", fontsize=20, fontweight="bold", loc="left")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+)
+
+more("numpy",
+    ex("Mandelbrot ফ্র্যাক্টাল",
+       "শুধু NumPy array দিয়ে লুপ ছাড়াই Mandelbrot সেট; 'smooth colouring' দিয়ে রঙের স্তরগুলো মসৃণ, একটা সুন্দর অংশে জুম করা।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+
+W, H, max_iter = 1400, 900, 300
+cx, cy, span = -0.743643887, 0.131825904, 0.012
+x = np.linspace(cx - span, cx + span, W)
+y = np.linspace(cy - span * H / W, cy + span * H / W, H)
+C = x[None, :] + 1j * y[:, None]
+
+Z = np.zeros_like(C)
+smooth = np.zeros(C.shape)
+alive = np.ones(C.shape, dtype=bool)
+for i in range(max_iter):
+    Z[alive] = Z[alive] ** 2 + C[alive]
+    escaped = alive & (np.abs(Z) > 4)
+    smooth[escaped] = i + 1 - np.log2(np.log(np.abs(Z[escaped])))
+    alive &= ~escaped
+
+smooth[alive] = 0
+img = np.where(alive, np.nan, np.sqrt(smooth))
+
+fig, ax = plt.subplots(figsize=(14, 9), facecolor="black")
+ax.imshow(img, cmap="twilight_shifted", extent=[x[0], x[-1], y[0], y[-1]], origin="lower",
+          interpolation="bilinear")
+ax.set_facecolor("black")
+ax.set_axis_off()
+ax.text(0.015, 0.03, "Mandelbrot set · Seahorse valley · 300 iterations", transform=ax.transAxes,
+        color="white", fontsize=13, fontweight="bold")
+plt.subplots_adjust(0, 0, 1, 1)
+plt.show()''', hint=SHOW),
+
+    ex("রিঅ্যাকশন-ডিফিউশন প্যাটার্ন",
+       "Gray-Scott মডেল: দুই রাসায়নিক ছড়ায় আর বিক্রিয়া করে – শুধু দুইটা সংখ্যা (f, k) বদলালে দাগ, রেখা বা গোলকধাঁধা তৈরি হয়, প্রকৃতির মতো।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+
+def gray_scott(f, k, n=200, steps=8000, seed=0):
+    rng = np.random.default_rng(seed)
+    U = np.ones((n, n))
+    V = np.zeros((n, n))
+    for _ in range(12):                                 # কয়েকটা বীজ
+        x, y = rng.integers(20, n - 20, 2)
+        U[x - 5:x + 5, y - 5:y + 5] = 0.5
+        V[x - 5:x + 5, y - 5:y + 5] = 0.25
+    Du, Dv = 0.16, 0.08
+    for _ in range(steps):
+        Lu = np.roll(U, 1, 0) + np.roll(U, -1, 0) + np.roll(U, 1, 1) + np.roll(U, -1, 1) - 4 * U
+        Lv = np.roll(V, 1, 0) + np.roll(V, -1, 0) + np.roll(V, 1, 1) + np.roll(V, -1, 1) - 4 * V
+        uvv = U * V * V
+        U += Du * Lu - uvv + f * (1 - U)
+        V += Dv * Lv + uvv - (f + k) * V
+    return V
+
+patterns = [("Spots", 0.0367, 0.0649, "magma"), ("Stripes", 0.042, 0.059, "viridis"),
+            ("Maze", 0.029, 0.057, "cividis"), ("Coral", 0.0545, 0.062, "inferno")]
+fig, axes = plt.subplots(1, 4, figsize=(16, 4.8), facecolor="#0b0820")
+for ax, (name, f, k, cmap) in zip(axes, patterns):
+    ax.imshow(gray_scott(f, k), cmap=cmap, interpolation="bicubic")
+    ax.set_title(f"{name}\\nf={f}, k={k}", color="white", fontsize=12, fontweight="bold")
+    ax.set_axis_off()
+fig.suptitle("Turing patterns from two simple equations", color="white",
+             fontsize=18, fontweight="bold", x=0.01, ha="left")
+plt.tight_layout(rect=(0, 0, 1, 0.9))
+plt.show()''', hint=SHOW),
+)
+
+more("scikit-image",
+    ex("কয়েন সেগমেন্টেশনের ধাপ",
+       "একটা ছবি থেকে বস্তু আলাদা করার পুরো পথ: আসল → এজ ম্যাপ → watershed সেগমেন্ট → রঙিন লেবেল ও নম্বরসহ ফল, চারটা প্যানেলে।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from scipy import ndimage as ndi
+from skimage import data, filters, measure, morphology, segmentation, color
+
+coins = data.coins()
+elevation = filters.sobel(coins)                         # কিনারার উঁচু-নিচু
+markers = np.zeros_like(coins)
+markers[coins < 30] = 1                                  # পটভূমি
+markers[coins > 150] = 2                                 # কয়েন
+seg = segmentation.watershed(elevation, markers)
+mask = ndi.binary_fill_holes(seg == 2)
+mask = morphology.remove_small_objects(mask, max_size=60)
+labels = measure.label(mask)
+
+fig, axes = plt.subplots(1, 4, figsize=(18, 5.2), facecolor="white")
+axes[0].imshow(coins, cmap="gray")
+axes[0].set_title("1 · Original", fontweight="bold", loc="left")
+axes[1].imshow(elevation, cmap="magma")
+axes[1].set_title("2 · Sobel elevation map", fontweight="bold", loc="left")
+axes[2].imshow(segmentation.mark_boundaries(coins, labels, color=(0.49, 0.23, 0.93), mode="thick"))
+axes[2].set_title("3 · Watershed boundaries", fontweight="bold", loc="left")
+axes[3].imshow(color.label2rgb(labels, image=coins, bg_label=0, alpha=0.45))
+for r in measure.regionprops(labels):
+    y, x = r.centroid
+    axes[3].text(x, y, str(r.label), color="white", ha="center", va="center",
+                 fontsize=9, fontweight="bold")
+axes[3].set_title(f"4 · {labels.max()} coins labelled", fontweight="bold", loc="left")
+for ax in axes:
+    ax.set_axis_off()
+fig.suptitle("From pixels to objects", fontsize=20, fontweight="bold", x=0.01, ha="left")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+
+    ex("ফিল্টার গ্যালারি",
+       "একটা ছবিতে ছয়টা ভিন্ন ফিল্টার: এজ, হিস্টোগ্রাম সমতা, ঘূর্ণি (swirl), পোস্টারাইজ, রং উল্টানো ও HSV রং ঘোরানো।",
+       '''import numpy as np
+import matplotlib.pyplot as plt
+from skimage import color, data, exposure, filters, transform, util
+
+img = data.astronaut()
+gray = color.rgb2gray(img)
+
+hsv = color.rgb2hsv(img)
+hsv[..., 0] = (hsv[..., 0] + 0.45) % 1.0
+hue_shift = color.hsv2rgb(hsv)
+poster = (np.floor(img / 64) * 64 + 32).astype(np.uint8)
+edges = filters.sobel(gray)
+
+panels = [
+    ("Original", img, None),
+    ("Sobel edges", edges, "magma"),
+    ("Adaptive equalisation", exposure.equalize_adapthist(img, clip_limit=0.03), None),
+    ("Swirl", transform.swirl(img, center=(220, 260), strength=8, radius=220), None),
+    ("Posterise (4 levels)", poster, None),
+    ("Hue rotated", hue_shift, None),
+]
+fig, axes = plt.subplots(2, 3, figsize=(15, 10.5), facecolor="white")
+for ax, (title, im, cmap) in zip(axes.flat, panels):
+    ax.imshow(im, cmap=cmap)
+    ax.set_title(title, fontsize=14, fontweight="bold", loc="left")
+    ax.set_axis_off()
+fig.suptitle("One photo, six filters", fontsize=22, fontweight="bold", x=0.01, ha="left")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+)
+
+more("opencv-python",
+    ex("কার্টুন, পেন্সিল স্কেচ ও অয়েল পেইন্ট",
+       "OpenCV-র ছবি-স্টাইলের ফাংশন: bilateral filter + adaptive threshold দিয়ে কার্টুন, pencilSketch, stylization আর detailEnhance – একটা বিড়ালের ছবিতে। (নমুনা ছবির জন্য scikit-image লাগে)",
+       '''import cv2
+import matplotlib.pyplot as plt
+from skimage import data            # শুধু নমুনা ছবির জন্য; নিজের ছবি হলে cv2.imread("cat.jpg")
+
+img = cv2.cvtColor(data.chelsea(), cv2.COLOR_RGB2BGR)
+
+# কার্টুন: রং মসৃণ করা + মোটা কালো কিনারা
+smooth = img.copy()
+for _ in range(5):
+    smooth = cv2.bilateralFilter(smooth, d=9, sigmaColor=40, sigmaSpace=9)
+gray = cv2.medianBlur(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 7)
+edges = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 9, 4)
+cartoon = cv2.bitwise_and(smooth, smooth, mask=edges)
+
+sketch_gray, sketch_color = cv2.pencilSketch(img, sigma_s=60, sigma_r=0.07, shade_factor=0.06)
+painting = cv2.stylization(img, sigma_s=80, sigma_r=0.45)
+detail = cv2.detailEnhance(img, sigma_s=12, sigma_r=0.2)
+
+panels = [("Original", img), ("Cartoon", cartoon), ("Pencil sketch", sketch_gray),
+          ("Coloured pencil", sketch_color), ("Oil painting", painting), ("Detail enhance", detail)]
+fig, axes = plt.subplots(2, 3, figsize=(15, 8.6), facecolor="white")
+for ax, (title, im) in zip(axes.flat, panels):
+    shown = im if im.ndim == 2 else cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+    ax.imshow(shown, cmap="gray" if im.ndim == 2 else None)
+    ax.set_title(title, fontsize=14, fontweight="bold", loc="left")
+    ax.set_axis_off()
+fig.suptitle("Photo effects with OpenCV", fontsize=22, fontweight="bold", x=0.01, ha="left")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+)
+
+more("pandas",
+    ex("স্টক চার্ট: চলমান গড়, বলিঙ্গার ব্যান্ড ও ভলিউম",
+       "pandas-এর rolling() দিয়ে ২০ ও ৫০ দিনের গড়, বলিঙ্গার ব্যান্ড, সবচেয়ে বড় পতনের এলাকা চিহ্নিত, নিচে রঙিন ভলিউম বার।",
+       '''import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(21)
+dates = pd.bdate_range("2025-01-01", periods=320)
+ret = rng.normal(0.0006, 0.017, len(dates))
+ret[150:190] -= 0.006                                   # একটা পতনের সময়
+df = pd.DataFrame({"close": 100 * np.exp(np.cumsum(ret)),
+                   "volume": rng.gamma(4, 2.5e5, len(dates))}, index=dates)
+
+df["ma20"] = df["close"].rolling(20).mean()
+df["ma50"] = df["close"].rolling(50).mean()
+std = df["close"].rolling(20).std()
+df["upper"], df["lower"] = df["ma20"] + 2 * std, df["ma20"] - 2 * std
+peak = df["close"].cummax()
+drawdown = df["close"] / peak - 1
+trough = drawdown.idxmin()
+start = df.loc[:trough, "close"].idxmax()
+
+fig, (ax, axv) = plt.subplots(2, 1, figsize=(13, 7.5), sharex=True,
+                              height_ratios=[3.2, 1], facecolor="white")
+ax.fill_between(df.index, df["lower"], df["upper"], color="#7c3aed", alpha=0.10, label="Bollinger band")
+ax.plot(df.index, df["close"], color="#140e29", lw=1.6, label="Close")
+ax.plot(df.index, df["ma20"], color="#7c3aed", lw=1.4, label="20-day average")
+ax.plot(df.index, df["ma50"], color="#d97706", lw=1.8, label="50-day average")
+ax.axvspan(start, trough, color="#e11d48", alpha=0.08)
+ax.annotate(f"Max drawdown {drawdown.min():.0%}", xy=(trough, df.loc[trough, "close"]),
+            xytext=(-60, 45), textcoords="offset points", ha="right",
+            arrowprops=dict(arrowstyle="->", color="#e11d48"), color="#e11d48", fontweight="bold")
+ax.legend(frameon=False, ncols=4, loc="upper left")
+ax.set_ylabel("Price")
+ax.grid(color="#eee")
+
+up = df["close"].diff() >= 0
+axv.bar(df.index, df["volume"], color=np.where(up, "#0d9488", "#e11d48"), width=1.0)
+axv.set_ylabel("Volume")
+for a in (ax, axv):
+    for s in ("top", "right"):
+        a.spines[s].set_visible(False)
+ax.set_title("Sample stock: trend, volatility and volume", loc="left", fontsize=20, fontweight="bold")
+plt.tight_layout()
+plt.show()''', hint=SHOW),
+)
