@@ -18,6 +18,11 @@ from datetime import date
 from pathlib import Path
 
 from details import DETAILS, examples_of
+try:                                    # পাইথন প্লেগ্রাউন্ডের রানটাইম (একবারই পেজে বসে)
+    from details import PYODIDE, PYPLAY_JS, PYPLAY_RUNNER, PYPLAY_SQL
+    PYRT = dict(tpl=PYPLAY_JS, runner=PYPLAY_RUNNER, sqlpy=PYPLAY_SQL, index=PYODIDE)
+except ImportError:
+    PYRT = None
 
 ROOT = Path(__file__).parent
 SITE_TITLE = "Python Library Atlas"
@@ -37,10 +42,22 @@ def slug(name, used):
     return s
 
 
+def slim_live(lv):
+    """পাইথন প্লেগ্রাউন্ডে কোড আবার না রেখে শুধু সেটিং (কোড তো উদাহরণেই আছে)।"""
+    if lv and "py" in lv:
+        p = lv["py"]
+        return dict(cdn=lv["cdn"], py=dict(pip=p["pip"], sql=p["sql"], pre=p["pre"]))
+    return lv
+
+
 def load():
     libs = json.loads((ROOT / "libraries.json").read_text(encoding="utf-8"))
     outputs_path = ROOT / "outputs.json"
     outputs = json.loads(outputs_path.read_text(encoding="utf-8")) if outputs_path.exists() else {}
+    # GitHub-এর ওয়েব-আপলোডে এক ফাইল সর্বোচ্চ ২৫ MB → বড় outputs.json ভাগ করে outputs/part-*.json-এ রাখা যায়।
+    # দুটোই থাকলে ভাগগুলো (নতুন) জেতে; পুরোনো hash না মিললে সেই আউটপুট এমনিতেই বাদ পড়ে।
+    for part in sorted((ROOT / "outputs").glob("part-*.json")):
+        outputs.update(json.loads(part.read_text(encoding="utf-8")))
     names = {l["name"] for l in libs}
     for key in DETAILS:
         if key not in names:
@@ -63,7 +80,7 @@ def load():
                 if o and o.get("hash") != h:
                     o = None                                   # কোড বদলেছে, পুরোনো আউটপুট বাদ
                 item["ex"].append(dict(t=e["title"], d=e["about"], hint=e.get("hint"), code=e["code"],
-                                       lang=e.get("lang", "python"), live=e.get("live"),
+                                       lang=e.get("lang", "python"), live=slim_live(e.get("live")),
                                        out=None if e.get("lang") == "js" else
                                        o and {k: o.get(k) for k in ("status", "text", "images", "files", "reason")}))
         item["ex"].sort(key=lambda e: e.get("hint") != "শোকেস")   # শোকেস আগে
@@ -133,7 +150,7 @@ def build():
     import sys
     cats, libs = load()
     n_files = export_images(libs, inline="--inline" in sys.argv)
-    data = json.dumps(dict(cats=cats, libs=libs), ensure_ascii=False).replace("</", "<\\/")
+    data = json.dumps(dict(cats=cats, libs=libs, pyrt=PYRT), ensure_ascii=False).replace("</", "<\\/")
     n_full = sum(l["full"] for l in libs)
     n_ex = sum(len(l["ex"]) for l in libs)
     n_img = sum(1 for l in libs for e in l["ex"] if e["out"] and e["out"].get("images"))
@@ -281,6 +298,7 @@ h1,h2,h3,h4{font-family:var(--disp);letter-spacing:-.02em}
 .tb button{width:30px;height:28px;border-radius:10px;cursor:pointer;color:var(--mut);font-size:12.5px;display:grid;place-items:center;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.9);box-shadow:0 1px 0 #fff inset,0 2px 6px -2px rgba(76,29,149,.18);transition:transform .2s,background .2s}
 .tb button:hover{background:#fff;transform:translateY(-1px);color:var(--tx)}
 .tb button.on{background:var(--acbg);color:var(--ac)}
+.tb button.cpy{width:auto;padding:0 10px;font-weight:700;color:var(--ac);white-space:nowrap}
 .stage{position:relative;background:#faf7ff;min-height:200px;display:grid;place-items:center;overflow:hidden}
 .stage img{display:block;width:100%;height:auto;max-height:560px;object-fit:contain;background:#fff;cursor:zoom-in}
 .stage .dots{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);display:flex;gap:6px;background:rgba(20,14,41,.55);padding:5px 8px;border-radius:99px}
@@ -290,6 +308,10 @@ h1,h2,h3,h4{font-family:var(--disp);letter-spacing:-.02em}
 .livechip{font:700 10px var(--sans);letter-spacing:.08em;color:#fff;background:linear-gradient(135deg,#e11d48,#d97706);border-radius:99px;padding:2px 8px;white-space:nowrap}
 .livechip:before{content:"● "}
 .ex:fullscreen .stage.live iframe,.ex.pfs .stage.live iframe{height:calc(100vh - 150px)}
+.livechip.py{background:linear-gradient(135deg,#0d9488,#0284c7)}.livechip.py:before{content:"▶ "}
+.pyrun{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 14px;border-top:1px solid rgba(124,58,237,.08);background:rgba(250,247,255,.6);font-size:12px;color:var(--mut)}
+.pyrun button{font:600 12px var(--sans);border:1px solid #0d9488;background:#0d9488;color:#fff;border-radius:99px;padding:6px 14px;cursor:pointer}
+.pyrun button:hover{filter:brightness(1.08)}.pyrun.on{display:none}
 .term{width:100%;align-self:stretch;margin:0;background:#140e29;color:#e9d5ff;font:12.5px/1.6 var(--mono);padding:16px 18px 16px 18px;white-space:pre-wrap;word-break:break-word;max-height:420px;overflow:auto}
 .term:before{content:"● ● ●  output";display:block;color:#6b6288;font-size:10.5px;letter-spacing:.12em;margin-bottom:8px}
 .term.sub{max-height:200px;border-top:1px solid rgba(255,255,255,.08)}
@@ -394,28 +416,34 @@ function firstImg(L){const has=e=>e.out&&e.out.images&&e.out.images.length;const
 function firstText(L){for(const e of L.ex)if(e.out&&e.out.text)return e.out.text;return L.ex.length?L.ex[0].code:null;}
 function liveDoc(lv){const css=(lv.css||[]).map(u=>'<link rel="stylesheet" href="'+u+'">').join('');
  const js=(lv.cdn||[]).map(u=>'<script src="'+u+'" onerror="window.__libfail=1;show(\'লাইব্রেরি লোড হয়নি – ইন্টারনেট সংযোগ লাগে\')"><\/script>').join('');
- return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+css+'<style>html,body{margin:0;height:100%;background:#fff;font-family:system-ui,-apple-system,sans-serif;overflow:hidden}#app{position:relative;width:100%;height:100%;box-sizing:border-box;padding:10px}#app>svg{display:block}button{font:600 12px system-ui;border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;border-radius:99px;padding:6px 14px;cursor:pointer;z-index:5}#err{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:20px;color:#6b6288;font-size:14px;background:#faf7ff}</style></head><body><div id="app"></div><div id="err"></div><script>function show(m){var e=document.getElementById("err");e.style.display="grid";e.textContent="⚠ "+m;}window.onerror=function(m){show(m);};<\/script>'+js+'<script>window.addEventListener("load",function(){if(window.__libfail)return;try{'+lv.js.replace(/<\/script/gi,'<\\/script')+'\n}catch(e){show(e.message);}});<\/script></body></html>';}
-function bootLive(st,X){if(st._on)return;st._on=true;const f=document.createElement('iframe');f.title=X.t;f.setAttribute('sandbox','allow-scripts');f.setAttribute('loading','lazy');f.srcdoc=liveDoc(X.live);st.innerHTML='';st.appendChild(f);}
+ return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'+css+'<style>html,body{margin:0;height:100%;background:#fff;font-family:system-ui,-apple-system,sans-serif;overflow:hidden}#app{position:relative;width:100%;height:100%;box-sizing:border-box;padding:10px}#app>svg{display:block}button{font:600 12px system-ui;border:1px solid #c4b5fd;background:#f5f3ff;color:#4c1d95;border-radius:99px;padding:6px 14px;cursor:pointer;z-index:5}#err{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:20px;color:#6b6288;font-size:14px;background:#faf7ff}</style></head><body><div id="app"></div><div id="err"></div><script>function show(m){var e=document.getElementById("err");e.style.display="grid";e.textContent="⚠ "+m;}window.onerror=function(m){if(/ResizeObserver loop/.test(m))return true;show(m);};<\/script>'+js+'<script>window.addEventListener("load",function(){if(window.__libfail)return;try{'+lv.js.replace(/<\/script/gi,'<\\/script')+'\n}catch(e){show(e.message);}});<\/script></body></html>';}
+function pyJS(X,auto){const R=DATA.pyrt,p=X.live.py,J=v=>JSON.stringify(v);const sub={__CODE__:J(X.code),__PIP__:J(p.pip||[]),__SQL__:J(p.sql||false),__PRE__:J(p.pre||''),__INDEX__:J(R.index),__AUTO__:auto?'true':'false',__RUNNER__:J(R.runner),__SQLPY__:J(p.sql?R.sqlpy:'')};
+ return R.tpl.replace(/__(CODE|PIP|SQL|PRE|INDEX|AUTO|RUNNER|SQLPY)__/g,m=>sub[m]);}
+function bootLive(st,X){if(st._on)return;st._on=true;const lv=X.live.py?{cdn:X.live.cdn,css:[],js:pyJS(X,true)}:X.live;const f=document.createElement('iframe');f.title=X.t;f.setAttribute('sandbox','allow-scripts');f.setAttribute('loading','lazy');f.srcdoc=liveDoc(lv);st.innerHTML='';st.appendChild(f);}
+function runPy(el,X){const old=el.querySelector('.stage'),sub=el.querySelector('.term.sub');if(sub)sub.remove();
+ const st=document.createElement('div');st.className='stage live';old.replaceWith(st);el.querySelector('.pyrun').classList.add('on');bootLive(st,X);}
 const LIO='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){bootLive(e.target,e.target._X);LIO.unobserve(e.target);}}),{rootMargin:'200px'}):null;
 function imgFail(im){if(!im.dataset.retry){im.dataset.retry=1;setTimeout(()=>{im.src=im.getAttribute('src').split('?')[0]+'?r='+Date.now();},600);return;}
  const box=document.createElement('div');box.className='skip';box.innerHTML='<div class="big">🖼️</div><b>ছবিটা লোড হয়নি</b>ফাইলটা সাইটে পাওয়া যায়নি ('+esc(im.getAttribute('src').split('?')[0])+')। GitHub-এ outputs.json আর build.py আপলোড হয়েছে কিনা দেখো।';im.replaceWith(box);}
 function stageHTML(X){const o=X.out;
- if(X.live)return '<div class="stage live"><div class="boot">লাইভ ডেমো লোড হচ্ছে…</div></div>';
+ if(X.live&&!X.live.py)return '<div class="stage live"><div class="boot">লাইভ ডেমো লোড হচ্ছে…</div></div>';
  if(o&&o.images&&o.images.length){return '<div class="stage">'+'<img loading="lazy" alt="'+esc(X.t)+'" src="'+o.images[0]+'" onerror="imgFail(this)">'+(o.images.length>1?'<div class="dots">'+o.images.map((_,k)=>'<button data-k="'+k+'"'+(k?'':' class="on"')+' aria-label="ছবি '+(k+1)+'"></button>').join('')+'</div>':'')+'</div>'+(o.text?'<pre class="term sub">'+esc(o.text)+'</pre>':'');}
  if(o&&o.text)return '<div class="stage"><pre class="term">'+esc(o.text)+'</pre></div>';
- const why=o&&o.reason||'আউটপুট এখনো তৈরি হয়নি';
+ const why=o&&o.reason||(X.lang==='js'?'এটা Node.js বা নিজের ওয়েবপেজে চালানোর কোড':'আউটপুট এখনো তৈরি হয়নি');
  return '<div class="stage"><div class="skip"><div class="big">▶</div><b>নিজের কম্পিউটারে চালাও</b>'+esc(why)+', তাই এখানে আগে থেকে চালানো যায়নি। নিচের <span class="kbd">&lt;/&gt;</span> বাটনে কোড দেখো।</div></div>';}
 function mountEx(L,X,i,into,showLib){const el=document.createElement('article');el.className='ex rv';el.id='ex-'+L.id+'-'+(i+1);
  const o=X.out||{};
- el.innerHTML='<header><span class="no">'+pad2(i+1)+'</span><h4 title="'+esc(X.t)+'">'+esc(X.t)+'</h4>'+(X.live?'<span class="livechip">লাইভ</span>':'')+(showLib?'<a class="libs" href="#/l/'+L.id+'">'+esc(L.name)+'</a>':'')+'<div class="tb">'+(X.live?'<button data-a="re" title="আবার চালাও">↻</button>':'')+'<button data-a="link" title="এই উদাহরণের লিংক কপি">🔗</button><button data-a="code" title="কোড দেখাও">&lt;/&gt;</button><button data-a="wide" title="চওড়া করো">⤢</button><button data-a="fs" title="ফুলস্ক্রিন">⛶</button></div></header>'
-  +stageHTML(X)+(o.files&&o.files.length?'<div class="files">তৈরি হলো: '+o.files.map(f=>'<span>'+esc(f)+'</span>').join('')+'</div>':'')
+ el.innerHTML='<header><span class="no">'+pad2(i+1)+'</span><h4 title="'+esc(X.t)+'">'+esc(X.t)+'</h4>'+(X.live?(X.live.py?'<span class="livechip py">চালানো যায়</span>':'<span class="livechip">লাইভ</span>'):'')+(showLib?'<a class="libs" href="#/l/'+L.id+'">'+esc(L.name)+'</a>':'')+'<div class="tb">'+(X.live&&!X.live.py?'<button data-a="re" title="আবার চালাও">↻</button>':'')+'<button data-a="cp" class="cpy" title="এক ক্লিকে পুরো কোড কপি">⧉ কপি</button><button data-a="link" title="এই উদাহরণের লিংক কপি">🔗</button><button data-a="code" title="কোড দেখাও">&lt;/&gt;</button><button data-a="wide" title="চওড়া করো">⤢</button><button data-a="fs" title="ফুলস্ক্রিন">⛶</button></div></header>'
+  +stageHTML(X)+(X.live&&X.live.py?'<div class="pyrun"><button data-py>▶ ব্রাউজারে চালাও · কোড বদলাও</button><span>Python সরাসরি তোমার ব্রাউজারে চলবে (প্রথমবার কয়েক সেকেন্ড)</span></div>':'')+(o.files&&o.files.length?'<div class="files">তৈরি হলো: '+o.files.map(f=>'<span>'+esc(f)+'</span>').join('')+'</div>':'')
   +'<div class="exd"><p>'+esc(X.d||'')+'</p>'+(X.hint?'<span class="hint">'+esc(X.hint)+'</span>':'')+'</div>'
   +'<div class="cwrap" hidden><button class="copy">কোড কপি</button><pre class="code">'+hl(X.code,X.lang)+'</pre></div>';
  const tb=el.querySelector('.tb');
- if(X.live){const st=el.querySelector('.stage');st._X=X;if(LIO)LIO.observe(st);else bootLive(st,X);}
+ if(X.live&&!X.live.py){const st=el.querySelector('.stage');st._X=X;if(LIO)LIO.observe(st);else bootLive(st,X);}
+ if(X.live&&X.live.py)el.querySelector('[data-py]').onclick=()=>runPy(el,X);
  tb.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const a=b.dataset.a;
   if(a==='code'){const w=el.querySelector('.cwrap');w.hidden=!w.hidden;b.classList.toggle('on',!w.hidden);}
   if(a==='wide'){el.classList.toggle('wide');b.classList.toggle('on');}
+  if(a==='cp'){copy(X.code,'কোড কপি হয়েছে');b.textContent='✓ কপি';b.classList.add('on');setTimeout(()=>{b.textContent='⧉ কপি';b.classList.remove('on');},1400);}
   if(a==='link')copy(location.href.split('#')[0]+'#/l/'+L.id+'/'+(i+1),'লিংক কপি হয়েছে');
   if(a==='fs')fullscreen(el);
   if(a==='re'){const st=el.querySelector('.stage');st._on=false;bootLive(st,X);}});
@@ -429,7 +457,7 @@ function pfs(el){const on=el.classList.toggle('pfs');document.body.style.overflo
 function tile(L,into){const a=document.createElement('a');a.className='tile rv';a.href='#/l/'+L.id;
  const img=firstImg(L),txt=!img&&L.full?firstText(L):null,c=CATMAP[L.cat].col;
  const pv=img?'<img loading="lazy" alt="" src="'+img+'">':txt?'<pre>'+esc(txt.split('\n').slice(0,12).join('\n'))+'</pre>':'<div class="ph">'+esc(L.name.replace(/[^A-Za-z0-9]/g,'').slice(0,2))+'</div>';
- a.innerHTML='<div class="pv"'+(img||txt?'':' style="background:linear-gradient(135deg,'+c+'cc,#1c1636)"')+'>'+pv+'</div><div class="m"><b>'+esc(L.name)+'</b> '+(L.full?'<span class="badge">✓ সম্পূর্ণ</span>':'<span class="badge soon">শীঘ্রই</span>')+(L.kind==='javascript'?' <span class="badge js">JS</span>':'')+(L.ex.some(e=>e.live)?' <span class="livechip">লাইভ</span>':'')+'<p>'+esc(L.tag)+'</p><small>'+(L.full?bn(L.ex.length)+'টা উদাহরণ':bn(L.nIdeas)+'টা প্রজেক্ট আইডিয়া')+'</small></div>';
+ a.innerHTML='<div class="pv"'+(img||txt?'':' style="background:linear-gradient(135deg,'+c+'cc,#1c1636)"')+'>'+pv+'</div><div class="m"><b>'+esc(L.name)+'</b> '+(L.full?'<span class="badge">✓ সম্পূর্ণ</span>':'<span class="badge soon">শীঘ্রই</span>')+(L.kind==='javascript'?' <span class="badge js">JS</span>':'')+(L.ex.some(e=>e.live&&!e.live.py)?' <span class="livechip">লাইভ</span>':'')+'<p>'+esc(L.tag)+'</p><small>'+(L.full?bn(L.ex.length)+'টা উদাহরণ':bn(L.nIdeas)+'টা প্রজেক্ট আইডিয়া')+'</small></div>';
  into.appendChild(a);}
 
 /* ---------- views ---------- */
@@ -530,5 +558,30 @@ document.addEventListener('pointermove',e=>{const c=e.target.closest&&e.target.c
 """
 
 
+def split_outputs(limit_mb=9):
+    """outputs.json → outputs/part-01.json, part-02.json … (প্রতিটা ≤ limit_mb), যাতে ব্রাউজার দিয়ে GitHub-এ আপলোড করা যায়।"""
+    data = json.loads((ROOT / "outputs.json").read_text(encoding="utf-8"))
+    folder = ROOT / "outputs"
+    folder.mkdir(exist_ok=True)
+    for old in folder.glob("part-*.json"):
+        old.unlink()
+    parts, cur, size = [], {}, 0
+    for k, v in data.items():
+        n = len(json.dumps({k: v}, ensure_ascii=False).encode("utf-8"))
+        if cur and size + n > limit_mb * 1024 * 1024:
+            parts.append(cur); cur, size = {}, 0
+        cur[k] = v; size += n
+    if cur:
+        parts.append(cur)
+    for i, part in enumerate(parts, 1):
+        f = folder / f"part-{i:02d}.json"
+        f.write_text(json.dumps(part, ensure_ascii=False), encoding="utf-8")
+        print(f"{f.name}: {len(part)}টা আউটপুট, {f.stat().st_size / 1e6:.1f} MB")
+
+
 if __name__ == "__main__":
-    build()
+    import sys
+    if "--split" in sys.argv:
+        split_outputs()
+    else:
+        build()
