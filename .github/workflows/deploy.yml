@@ -1,4 +1,4 @@
-name: Build and deploy site
+name: Deploy site to GitHub Pages
 
 on:
   push:
@@ -15,29 +15,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # build.py শুধু Python-এর নিজস্ব লাইব্রেরি লাগে; outputs.json অথবা outputs/part-*.json থেকে ছবি বানায়
+      - run: python build.py
+      - run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r img _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
   deploy:
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - name: Run build.py
-        run: |
-          python build.py
-          mkdir -p _site
-          cp index.html _site/
-
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
       - id: deployment
         uses: actions/deploy-pages@v4
